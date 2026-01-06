@@ -1,431 +1,523 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆牧場 Pro | 雲端生產管理系統</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Excel 處理庫 -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { 
+  Calendar, Activity, Users, Home, Clock, Warehouse, Baby, TrendingUp, 
+  Upload, CheckCircle2, SearchX, Search, Database, Cloud, Edit3, X, 
+  MinusCircle, BarChart2, Loader2, FileWarning, AlertTriangle
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  Cell, AreaChart, Area
+} from 'recharts';
+
+// --- 全域配置與解析引擎 URL ---
+const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+
+const CONFIG = {
+  BATCH_INTERVAL_DAYS: 21,
+  ANCHOR_DATE: new Date('2025-02-04'), 
+  STAGES_DAYS_FROM_BIRTH: { 
+    LACTATION: 28,   
+    NURSERY: 77,     
+    SMALL_PIG: 133,  
+    MEDIUM_PIG: 168, 
+    LARGE_PIG: 196   
+  },
+  GESTATION_DAYS: 115,
+  DAYS_IN_MONTH: 30.4,
+  TOTAL_ACTIVE_BATCHES: 19 
+};
+
+// --- 強力類型安全工具 ---
+const safeStr = (v) => {
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  if (v === null || v === undefined) return "";
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v).trim();
+};
+
+const cleanNum = (v) => {
+  if (typeof v === 'number') return v;
+  const n = parseFloat(String(v || "").replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? 0 : n;
+};
+
+// --- Firebase 配置相容性處理 (Rule 3) ---
+const getFirebaseConfig = () => {
+  // 優先使用沙盒注入的配置，若無則嘗試環境變數（適用於本地移植）
+  if (typeof __firebase_config !== 'undefined') {
+    return JSON.parse(__firebase_config);
+  }
+  return {
+    apiKey: "", // 本地部署時請填入您的 API Key
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: ""
+  };
+};
+
+const firebaseConfig = getFirebaseConfig();
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'yonglong-farm-pro';
+
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activeTab, setActiveTab] = useState('inventory');
+  const [excelData, setExcelData] = useState([]);
+  const [records, setRecords] = useState({}); 
+  const [editingBatch, setEditingBatch] = useState(null);
+  const [analysisBatch, setAnalysisBatch] = useState(null);
+  const [editDate, setEditDate] = useState(targetDate);
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [excelStatus, setExcelStatus] = useState({ state: 'idle', message: '等待系統初始化...' });
+  const fileInputRef = useRef(null);
+  const [excelSearch, setExcelSearch] = useState('');
+
+  // 1. 動態載入 Excel 解析引擎 (解決 Could not resolve "xlsx" 錯誤)
+  useEffect(() => {
+    if (window.XLSX) {
+      setExcelStatus({ state: 'idle', message: '請上傳 Excel 檔案' });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = XLSX_URL;
+    script.async = true;
+    script.onload = () => setExcelStatus({ state: 'idle', message: '解析引擎已就緒' });
+    script.onerror = () => setExcelStatus({ state: 'error', message: '核心套件載入失敗' });
+    document.head.appendChild(script);
+  }, []);
+
+  // 2. Firebase 驗證邏輯 (遵循 Rule 3)
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) { console.error("Auth Fail:", err); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 3. Firestore 實時監聽 (遵循 Rule 1 & 2)
+  useEffect(() => {
+    if (!user) return;
+    setIsSyncing(true);
+    const recordsCol = collection(db, 'artifacts', appId, 'public', 'data', 'dailyRecords');
+    const unsubscribe = onSnapshot(recordsCol, (snapshot) => {
+      const newRecords = {};
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data?.batchId) {
+          if (!newRecords[data.batchId]) newRecords[data.batchId] = {};
+          newRecords[data.batchId][data.date] = data;
+        }
+      });
+      setRecords(newRecords);
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setIsSyncing(false);
+    }, (err) => { 
+      setIsSyncing(false); 
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // --- 檔案處理 ---
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || !window.XLSX) return;
+    setExcelStatus({ state: 'loading', message: '正在解析中...' });
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const wb = window.XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        // 強制日期格式化，防止物件進入渲染
+        const jsonData = window.XLSX.utils.sheet_to_json(ws, { defval: "", raw: false, dateNF: 'yyyy-mm-dd' });
+        const cleanedData = jsonData.map(row => {
+          const newRow = {};
+          Object.keys(row).forEach(k => { newRow[k.trim()] = row[k]; });
+          return newRow;
+        });
+        setExcelData(cleanedData);
+        setExcelStatus({ state: 'success', message: `成功讀取 ${cleanedData.length} 筆資料` });
+        setActiveTab('inventory');
+      } catch (err) {
+        setExcelStatus({ state: 'error', message: '解析失敗，請確認格式' });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const getBatchGXY = (matingDate) => {
+    const diffTime = matingDate.getTime() - CONFIG.ANCHOR_DATE.getTime();
+    const diffCycles = Math.round(diffTime / (CONFIG.BATCH_INTERVAL_DAYS * 86400000));
+    let y = ((diffCycles % 7) + 7) % 7 + 1;
+    let x = ((Math.floor(diffCycles / 7) % 9) + 9) % 9 + 1;
+    const mYear = matingDate.getFullYear();
+    const theoFarrowDate = new Date(matingDate.getTime() + CONFIG.GESTATION_DAYS * 86400000);
+    const fYear = theoFarrowDate.getFullYear();
+    const shortId = `G${x}${y}`;
+    return { fullId: `${mYear}-${shortId}`, farrowId: `${fYear}-${shortId}`, shortId, mYear, fYear, theoFarrowDate };
+  };
+
+  // --- 核心運算：基準位移與肉豬起點統一 ---
+  const ranchStatus = useMemo(() => {
+    const selected = new Date(targetDate);
+    const timeSinceAnchor = selected.getTime() - CONFIG.ANCHOR_DATE.getTime();
     
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
-        .font-black { font-weight: 900 !important; }
-        .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
-</head>
-<body class="min-h-screen pb-24 font-black">
+    // 定位起始批次：比選擇日期還新(未來)且最接近的那一批
+    const cyclesToFuture = Math.ceil(timeSinceAnchor / (CONFIG.BATCH_INTERVAL_DAYS * 86400000));
+    const pivotDate = new Date(CONFIG.ANCHOR_DATE);
+    pivotDate.setDate(pivotDate.getDate() + (cyclesToFuture * CONFIG.BATCH_INTERVAL_DAYS));
 
-    <!-- 1. 密碼驗證層 -->
-    <div id="auth-overlay" class="fixed inset-0 z-[5000] bg-slate-900 flex items-center justify-center p-6">
-        <div class="max-w-md w-full bg-white rounded-[48px] p-10 shadow-2xl text-center animate-fade">
-            <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl mx-auto flex items-center justify-center mb-8 shadow-inner">
-                <i data-lucide="shield-check" class="w-10 h-10"></i>
+    return Array.from({ length: CONFIG.TOTAL_ACTIVE_BATCHES }).map((_, i) => {
+      const theoMatingDate = new Date(pivotDate);
+      theoMatingDate.setDate(theoMatingDate.getDate() - (i * CONFIG.BATCH_INTERVAL_DAYS));
+      
+      const { fullId, farrowId, shortId, mYear, fYear, theoFarrowDate } = getBatchGXY(theoMatingDate);
+
+      const cleanID = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const actualMatch = excelData.find(d => {
+        const exId = cleanID(d['批次ID'] || d['批次'] || d['Batch ID'] || d['編號'] || '');
+        if (!exId) return false;
+        return exId.includes(cleanID(fullId)) || exId.includes(cleanID(farrowId)) ||
+               (exId.includes(cleanID(shortId)) && (exId.includes(String(mYear)) || exId.includes(String(fYear))));
+      });
+
+      let matingDateStr = theoMatingDate.toISOString().split('T')[0];
+      if (actualMatch && (actualMatch['配種日期'] || actualMatch['配種日'])) matingDateStr = safeStr(actualMatch['配種日期'] || actualMatch['配種日']);
+
+      const farrowingTime = new Date(matingDateStr).getTime() + CONFIG.GESTATION_DAYS * 86400000;
+      const ageDays = Math.floor((selected.getTime() - farrowingTime) / (24 * 60 * 60 * 1000));
+
+      let stage = "理論預估";
+      let location = "待排程";
+      let matingCount = 0;
+      let stageEntryCount = 0; // 該階段入舍數，算存欄用
+      let nurseryEntryBase = 0; // 統一保育基準，算育成率用
+      let stageStartDate = farrowingTime; 
+
+      if (actualMatch) {
+        matingCount = cleanNum(actualMatch["配種數"] || actualMatch["配種頭數"] || actualMatch["母豬數"]);
+        nurseryEntryBase = cleanNum(actualMatch["入保育舍豬量"]);
+
+        // 判定當前階段 (權重：大 > 中 > 小 > 保 > 產)
+        if (cleanNum(actualMatch["入大豬舍豬量"]) > 0) {
+          stage = (ageDays > CONFIG.STAGES_DAYS_FROM_BIRTH.LARGE_PIG) ? "出豬緩衝期" : "大豬期";
+          location = actualMatch["大舍"] || actualMatch["豬舍"] || "大豬舍";
+          stageEntryCount = cleanNum(actualMatch["入大豬舍豬量"]);
+          stageStartDate = farrowingTime + CONFIG.STAGES_DAYS_FROM_BIRTH.MEDIUM_PIG * 86400000;
+        } 
+        else if (cleanNum(actualMatch["入中豬舍豬量"]) > 0) {
+          stage = "中豬期";
+          location = actualMatch["中舍"] || actualMatch["豬舍"] || "中豬舍";
+          stageEntryCount = cleanNum(actualMatch["入中豬舍豬量"]);
+          stageStartDate = farrowingTime + CONFIG.STAGES_DAYS_FROM_BIRTH.SMALL_PIG * 86400000;
+        }
+        else if (cleanNum(actualMatch["入小豬舍豬量"] || actualMatch["入小豬舍肉豬量"]) > 0) {
+          stage = "小豬期";
+          location = actualMatch["小舍"] || actualMatch["豬舍"] || "小豬舍";
+          stageEntryCount = cleanNum(actualMatch["入小豬舍豬量"] || actualMatch["入小豬舍肉豬量"]);
+          stageStartDate = farrowingTime + CONFIG.STAGES_DAYS_FROM_BIRTH.NURSERY * 86400000;
+        }
+        else if (cleanNum(actualMatch["入保育舍豬量"]) > 0) {
+          stage = "保育期"; 
+          location = actualMatch["保舍"] || actualMatch["豬舍"] || "保一";
+          stageEntryCount = cleanNum(actualMatch["入保育舍豬量"]);
+          stageStartDate = farrowingTime + CONFIG.STAGES_DAYS_FROM_BIRTH.LACTATION * 86400000;
+        }
+        else if (cleanNum(actualMatch["出生頭數"] || actualMatch["產仔數"]) > 0) {
+          stage = "哺乳期"; 
+          location = actualMatch["產房"] || "產房";
+          stageEntryCount = cleanNum(actualMatch["出生頭數"] || actualMatch["產仔數"]);
+          stageStartDate = farrowingTime;
+        }
+
+        // 若保育基準為空但現在已進入肉豬期，則使用當前階段數值備援
+        if (nurseryEntryBase === 0) nurseryEntryBase = stageEntryCount;
+      }
+
+      // 雲端數據計算 (動態過濾)
+      const batchHistory = records[fullId] || {};
+      const cumulative = Object.keys(batchHistory).reduce((acc, d) => {
+        const recordDate = new Date(d);
+        if (recordDate <= selected) {
+          acc.pigDeath += (batchHistory[d].pigDeath || 0);
+          acc.abortion += (batchHistory[d].abortion || 0);
+          acc.negative += (batchHistory[d].negative || 0);
+          acc.sowDeath += (batchHistory[d].sowDeath || 0);
+          if (recordDate.getTime() >= stageStartDate) acc.stageSpecificDeath += (batchHistory[d].pigDeath || 0);
+        }
+        return acc;
+      }, { abortion: 0, negative: 0, sowDeath: 0, pigDeath: 0, stageSpecificDeath: 0 });
+
+      // 理論模式
+      if (stageEntryCount === 0 && !actualMatch) {
+         const theoreticalAge = Math.floor((selected - new Date(matingDateStr)) / 86400000) - 115;
+         if (theoreticalAge <= 0) { stage = theoreticalAge < -115 ? "預備配種" : "懷孕期"; location = "配種懷孕舍"; }
+         else if (theoreticalAge <= 28) { stage = "哺乳期"; location = "產房"; }
+         else if (theoreticalAge <= 77) { stage = "保育期"; location = "保育舍"; }
+         else { stage = "肉豬期"; location = "肥育舍"; }
+      }
+
+      return {
+        id: safeStr(fullId), farrowId: safeStr(farrowId), shortId: safeStr(shortId), 
+        matingDate: safeStr(matingDateStr), 
+        farrowingDate: safeStr(theoFarrowDate.toISOString().split('T')[0]),
+        stage: safeStr(stage), location: safeStr(location), ageDays, 
+        weekAge: (ageDays / 7).toFixed(1), monthAge: (ageDays / CONFIG.DAYS_IN_MONTH).toFixed(2), 
+        headcount: (stageEntryCount || 0) - (cumulative.stageSpecificDeath || 0), // 當前存欄
+        nurseryEntryBase, // 分母
+        matingCount, estFarrowing: matingCount - (cumulative.abortion + cumulative.negative + cumulative.sowDeath), 
+        cumulativeLoss: cumulative, isActual: !!actualMatch, 
+        type: (i < 7) ? "母豬" : "肉豬"
+      };
+    });
+  }, [targetDate, excelData, records]);
+
+  // --- 分頁過濾 ---
+  const sowBatches = useMemo(() => ranchStatus.filter(b => b.type === "母豬"), [ranchStatus]);
+  const pigBatches = useMemo(() => ranchStatus.filter(b => b.type === "肉豬"), [ranchStatus]);
+  
+  const filteredExcelData = useMemo(() => {
+    if (!excelSearch) return excelData;
+    return excelData.filter(row => Object.values(row).some(v => safeStr(v).toUpperCase().includes(excelSearch.toUpperCase())));
+  }, [excelData, excelSearch]);
+
+  const saveToCloud = async (batchId, date, key, value) => {
+    if (!user) return;
+    const docId = `${batchId}_${date}`;
+    const current = records[batchId]?.[date] || { abortion: 0, negative: 0, sowDeath: 0, pigDeath: 0 };
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dailyRecords', docId), { 
+      ...current, batchId, date, [key]: cleanNum(value), updatedAt: new Date().toISOString() 
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 font-black">
+      <div className={`px-6 py-1.5 text-[11px] font-black uppercase flex items-center justify-between transition-all shadow-sm ${excelStatus.state === 'success' ? 'bg-emerald-600 text-white' : excelStatus.state === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+        <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                {excelStatus.state === 'success' ? <CheckCircle2 size={14}/> : excelStatus.state === 'error' ? <FileWarning size={14}/> : <Loader2 size={14} className="animate-spin"/>}
+                系統狀態：{excelStatus.message}
             </div>
-            <h2 class="text-3xl font-black mb-2 tracking-tighter">永隆指揮中心</h2>
-            <p class="text-slate-400 font-bold text-sm mb-8 uppercase tracking-widest">Master Passcode Required</p>
-            <input type="password" id="passcode-input" placeholder="••••••" 
-                   class="w-full px-6 py-5 bg-slate-50 rounded-2xl text-center text-3xl font-black mb-8 outline-none border-2 border-transparent focus:border-indigo-500 tracking-[0.3em] transition-all">
-            <button onclick="checkPasscode()" class="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg active:scale-95 shadow-xl hover:bg-indigo-700 transition-all uppercase">進入系統</button>
+            {user && <span className="opacity-60">| 雲端連線成功</span>}
         </div>
-    </div>
+        {lastSyncTime && <span>數據同步於：{lastSyncTime}</span>}
+      </div>
 
-    <!-- 2. 訊息通知層 -->
-    <div id="msg-box" class="fixed top-10 left-1/2 -translate-x-1/2 z-[6000] px-8 py-4 rounded-2xl shadow-2xl font-black hidden transition-all"></div>
-
-    <!-- 3. 主應用介面 -->
-    <div id="app-content" class="opacity-0 transition-opacity duration-500">
-        <!-- 狀態 Bar -->
-        <div id="status-bar" class="bg-slate-800 text-slate-400 px-6 py-2 text-[10px] font-black uppercase flex justify-between items-center transition-colors">
-            <div class="flex items-center gap-4">
-                <span id="cloud-status" class="flex items-center gap-1"><i data-lucide="cloud-off" class="w-3 h-3"></i> 雲端連線中...</span>
-                <span id="excel-count" class="flex items-center gap-1"><i data-lucide="file-text" class="w-3 h-3"></i> 尚未讀取檔案</span>
+      <header className="bg-[#0f172a] text-white p-6 shadow-xl sticky top-0 z-40 border-b border-white/5 font-black uppercase">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 font-black">
+          <div className="flex items-center gap-4">
+            <div className="bg-emerald-500 p-2.5 rounded-2xl shadow-lg"><Activity size={24} /></div>
+            <div><h1 className="text-2xl tracking-tight">永隆牧場 <span className="text-emerald-400 italic">Cloud Pro</span></h1><p className="text-slate-400 text-[10px] tracking-widest italic tracking-tighter">Unified Benchmark Dashboard v6.3</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 font-bold">
+            <label className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl cursor-pointer transition-all text-sm shadow-md active:scale-95 group border border-emerald-400/20 font-black">
+              <Upload size={16} />讀取永隆批次檔案<input ref={fileInputRef} type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
+            </label>
+            <div className="bg-slate-800 p-2.5 px-5 rounded-xl border border-slate-700 flex items-center gap-3">
+              <Calendar size={14} className="text-emerald-400" />
+              <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="bg-transparent text-white font-black outline-none text-sm cursor-pointer"/>
             </div>
-            <span id="last-sync" class="opacity-60 italic text-[9px]"></span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-4 md:p-8 animate-in fade-in duration-700 font-black">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10 font-black">
+          <StatCard title="預估分娩總頭數" value={sowBatches.reduce((a,b)=>a+(b.estFarrowing || 0),0)} unit="頭" color="blue" icon={<Baby size={22}/>} />
+          <StatCard title="肉豬選取日存欄" value={pigBatches.reduce((a,b)=>a+(b.headcount || 0),0).toLocaleString()} unit="頭" color="orange" icon={<TrendingUp size={22}/>} />
+          <StatCard title="匹配成功批次" value={ranchStatus.filter(b=>b.isActual).length} unit="批" color="emerald" icon={<CheckCircle2 size={22}/>} />
+          <StatCard title="今日雲端更新" value={Object.keys(records).length} unit="筆" color="pink" icon={<Cloud size={22}/>} />
         </div>
 
-        <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 py-5">
-            <div class="max-w-[1400px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-                <div class="flex items-center gap-4">
-                    <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white"><i data-lucide="activity"></i></div>
-                    <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase">永隆牧場 <span class="text-indigo-600 italic">Pro v6.3</span></h1>
-                        <div class="flex items-center gap-2">
-                            <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 shadow-sm">載入中</span>
-                            <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 transition-colors">
-                        </div>
-                    </div>
-                </div>
+        <div className="flex gap-2 mb-8 bg-slate-200/50 p-1.5 rounded-2xl w-fit font-bold font-black">
+          <TabButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} label="動態盤點紀錄" />
+          <TabButton active={activeTab === 'visual'} onClick={() => setActiveTab('visual')} label="損耗趨勢分析" />
+          <TabButton active={activeTab === 'excel'} onClick={() => setActiveTab('excel')} label="原始資料對齊" />
+        </div>
 
-                <div class="flex items-center gap-3">
-                    <label class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl cursor-pointer transition-all text-xs font-black shadow-lg flex items-center gap-2 active:scale-95">
-                        <i data-lucide="upload" class="w-4 h-4"></i>讀取 Excel<input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
-                    </label>
-                    <button onclick="exportCurrentData()" class="bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-xs font-black shadow-sm hover:bg-slate-50 flex items-center gap-2 active:scale-95">
-                        <i data-lucide="download" class="w-4 h-4"></i>匯出備份
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <main class="max-w-[1400px] mx-auto px-6 py-10 space-y-10 font-black">
-            <!-- 統計快照 -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div><p class="text-slate-400 text-[10px] uppercase mb-1">預估分娩總頭數</p><div class="flex items-baseline gap-1"><span id="stat-farrow" class="text-2xl text-blue-600">0</span><span class="text-[10px] text-slate-400">頭</span></div></div>
-                    <div class="bg-blue-50 p-3 rounded-2xl text-blue-600"><i data-lucide="baby"></i></div>
-                </div>
-                <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div><p class="text-slate-400 text-[10px] uppercase mb-1">選取日肉豬存欄</p><div class="flex items-baseline gap-1"><span id="stat-headcount" class="text-2xl text-orange-600">0</span><span class="text-[10px] text-slate-400">頭</span></div></div>
-                    <div class="bg-orange-50 p-3 rounded-2xl text-orange-600"><i data-lucide="trending-up"></i></div>
-                </div>
-                <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div><p class="text-slate-400 text-[10px] uppercase mb-1">匹配成功批次</p><div class="flex items-baseline gap-1"><span id="stat-match" class="text-2xl text-emerald-600">0</span><span class="text-[10px] text-slate-400">批</span></div></div>
-                    <div class="bg-emerald-50 p-3 rounded-2xl text-emerald-600"><i data-lucide="check-circle-2"></i></div>
-                </div>
-                <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div><p class="text-slate-400 text-[10px] uppercase mb-1">雲端動態筆數</p><div class="flex items-baseline gap-1"><span id="stat-cloud" class="text-2xl text-indigo-600">0</span><span class="text-[10px] text-slate-400">筆</span></div></div>
-                    <div class="bg-indigo-50 p-3 rounded-2xl text-indigo-600"><i data-lucide="cloud"></i></div>
-                </div>
-            </div>
-
-            <!-- 母豬區 -->
+        {activeTab === 'inventory' && (
+          <div className="space-y-12 font-black">
             <section>
-                <h2 class="text-xl mb-6 flex items-center gap-3 border-l-4 border-emerald-500 pl-4 uppercase tracking-tighter">母豬繁殖階段 (固定 7 批)</h2>
-                <div id="sow-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+              <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-slate-800 border-l-4 border-emerald-500 pl-4 font-black">母豬繁殖階段 (固定 7 批)</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-black font-medium">
+                {sowBatches.map(batch => <BatchCard key={batch.id} batch={batch} onEdit={() => setEditingBatch(batch)} />)}
+              </div>
             </section>
 
-            <!-- 肉豬區 -->
             <section>
-                <h2 class="text-xl mb-6 flex items-center gap-3 border-l-4 border-blue-500 pl-4 uppercase tracking-tighter">肉豬分階段存欄 (選取日快照)</h2>
-                <div class="bg-white rounded-[32px] shadow-xl border border-slate-200 overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-slate-900 text-white font-black text-[11px] uppercase tracking-widest">
-                                <tr>
-                                    <th class="p-6">分娩日期 / ID</th>
-                                    <th class="p-6">階段/位置</th>
-                                    <th class="p-6">週齡</th>
-                                    <th class="p-6 text-right text-emerald-400">入保育量</th>
-                                    <th class="p-6 text-right text-pink-400">本階段死亡</th>
-                                    <th class="p-6 text-right">當前存欄</th>
-                                    <th class="p-6 text-center">育成率</th>
-                                    <th class="p-6 text-center">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pig-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
-                        </table>
-                    </div>
+              <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-slate-800 border-l-4 border-blue-500 pl-4 border-t pt-10 mt-10 font-black">肉豬分階段存欄 (選取日快照)</h2>
+              <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200 font-black">
+                <div className="overflow-x-auto font-black">
+                  <table className="w-full text-left border-collapse font-black">
+                    <thead className="bg-[#334155] text-white font-black font-black font-black">
+                      <tr>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest font-black">分娩日期 / ID</th>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest font-black">階段/位置</th>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest font-black">週齡/月齡</th>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest text-right text-emerald-300 font-black">入保育舍量</th>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest text-right text-pink-300 font-black">本階段死亡</th>
+                        <th className="p-5 text-[11px] font-black uppercase tracking-widest text-right font-black font-black">當前存欄</th>
+                        <th className="p-5 text-center text-[11px] font-black uppercase tracking-widest font-black">育成率</th>
+                        <th className="p-5 text-center text-[11px] font-black uppercase tracking-widest font-black">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm font-black font-black">
+                      {pigBatches.map(batch => {
+                        const sr = batch.nurseryEntryBase > 0 ? ((batch.headcount / batch.nurseryEntryBase) * 100).toFixed(1) : "0.0";
+                        const isSrAlarm = parseFloat(sr) < 90;
+                        return (
+                          <tr key={batch.id} className="hover:bg-slate-50 transition-colors group font-black">
+                            <td className="p-5 font-black"><div className="text-[10px] text-slate-400 font-black">{safeStr(batch.farrowingDate)}</div><div className="font-mono font-black text-slate-900">{safeStr(batch.id)}</div></td>
+                            <td className="p-5 font-black"><span className="text-[10px] font-black px-2 py-1 bg-slate-100 rounded-lg mr-2 border border-slate-200">{safeStr(batch.stage)}</span><span className={`font-black ${batch.location === '待排程' ? 'text-slate-300 italic' : 'text-slate-600'}`}>{safeStr(batch.location)}</span></td>
+                            <td className="p-5 font-black"><div className="flex flex-col text-[12px] font-black"><span className="font-black text-blue-600">{batch.weekAge}W</span><span className="text-[10px] font-black text-slate-400">{batch.monthAge}Mo</span></div></td>
+                            <td className="p-5 text-right font-black text-slate-400">{batch.nurseryEntryBase}</td>
+                            <td className="p-5 text-right font-black text-pink-600">-{batch.cumulativeLoss.stageSpecificDeath || 0}</td>
+                            <td className="p-5 text-right font-black text-slate-900 text-lg">{batch.headcount}</td>
+                            <td className="p-5 text-center font-black">
+                                <span className={`text-sm font-black px-3 py-1 rounded-xl shadow-sm ${isSrAlarm ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                    {sr}%
+                                </span>
+                            </td>
+                            <td className="p-5 text-center font-black">
+                                <div className="flex items-center justify-center gap-1.5 font-black">
+                                    <button onClick={() => setEditingBatch(batch)} className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-full transition-all border border-transparent hover:border-emerald-100 shadow-sm font-black" title="錄入死亡紀錄"><Edit3 size={18} /></button>
+                                    <button onClick={() => setAnalysisBatch(batch)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-all border border-transparent hover:border-blue-100 shadow-sm font-black" title="查看分析趨勢"><BarChart2 size={18} /></button>
+                                </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
             </section>
-        </main>
-    </div>
+          </div>
+        )}
 
-    <!-- 錄入 Modal -->
-    <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
-        <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade font-black">
-            <div class="bg-indigo-600 p-8 text-white flex justify-between items-center">
-                <div><h3 id="modal-batch-id" class="text-2xl font-black italic">BATCH ID</h3><p class="text-indigo-200 text-[10px] uppercase font-bold tracking-widest mt-1">Automatic Cloud Persistence</p></div>
-                <button onclick="closeEditModal()" class="p-2 hover:bg-white/20 rounded-full transition-all"><i data-lucide="x"></i></button>
-            </div>
-            <div class="p-8 space-y-6">
-                <div class="bg-orange-50 p-5 rounded-3xl border border-orange-100">
-                    <label class="text-[10px] text-orange-600 uppercase mb-2 block tracking-widest">紀錄日期 (可補打)</label>
-                    <input type="date" id="modal-date" class="w-full bg-white border-2 border-transparent focus:border-orange-400 outline-none p-3 rounded-2xl text-xl font-black transition-all">
+        {/* 原始資料對齊分頁 */}
+        {activeTab === 'excel' && (
+           <div className="space-y-6 animate-in slide-in-from-bottom-5 font-black">
+             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden font-black">
+                <div className="p-6 bg-slate-50 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 font-black">
+                  <div className="flex items-center gap-3 font-black"><Database size={24} className="text-emerald-600 font-black" /><div><h3 className="text-lg font-black font-black">Excel 原始資料內容</h3><p className="text-xs text-slate-400 font-black font-black font-black">系統共載入 {excelData.length} 筆原始紀錄</p></div></div>
+                  <div className="relative flex-1 max-w-sm font-black font-black font-black">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                    <input type="text" placeholder="搜尋關鍵字..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 text-sm font-black font-black" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+                  </div>
                 </div>
-                <div id="modal-inputs" class="space-y-4"></div>
-                <button onclick="saveLossRecord()" class="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">確認儲存並同步雲端</button>
-            </div>
-        </div>
-    </div>
+                {excelData.length > 0 ? (
+                  <div className="overflow-x-auto max-h-[600px] font-black">
+                    <table className="w-full text-left text-[11px] border-collapse font-bold font-black">
+                      <thead className="bg-[#334155] text-white sticky top-0 font-black">
+                        <tr>{Object.keys(excelData[0]).map(h => <th key={h} className="p-4 whitespace-nowrap font-black font-black">{h}</th>)}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-600 font-black">
+                        {filteredExcelData.map((r, i) => (<tr key={i} className="hover:bg-emerald-50 transition-colors font-black">{Object.values(r).map((c, j) => <td key={j} className="p-4 whitespace-nowrap font-black">{safeStr(c)}</td>)}</tr>))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div className="py-20 text-center text-slate-400 italic font-black uppercase font-black font-black">尚未上傳。請點擊上方綠色「讀取永隆批次檔案」按鈕。</div>}
+             </div>
+           </div>
+        )}
 
-    <script type="module">
-        // Firebase 導入
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- 核心金鑰區 (請在下方貼上您自己的 Firebase Config) ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyBd-t01YqCEJorVA3Pguz_z2qfOIKhVJ28", 
-            authDomain: "yonglong-farm.firebaseapp.com",
-            projectId: "yonglong-farm",
-            storageBucket: "yonglong-farm.firebasestorage.app",
-            messagingSenderId: "420882808146",
-            appId: "1:420882808146:web:6086ac11d1323936418e8b"
-        };
-        const PASSCODE = "YL2025";
-        const APP_ID = "yonglong-production-main";
-
-        const CONFIG = {
-            BATCH_INTERVAL: 21,
-            ANCHOR: new Date('2025-02-04'),
-            GESTATION: 115,
-            STAGES: { L: 28, N: 77, S: 133, M: 168, B: 196 }
-        };
-
-        let db, auth;
-        let excelData = [];
-        let cloudRecords = {};
-        let selectedDate = new Date().toISOString().split('T')[0];
-        let editingBatchId = null;
-
-        window.onload = () => {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            lucide.createIcons();
-            
-            document.getElementById('date-picker').value = selectedDate;
-            document.getElementById('date-picker').onchange = (e) => {
-                selectedDate = e.target.value;
-                render();
-            };
-
-            document.getElementById('file-input').onchange = handleFileUpload;
-
-            onAuthStateChanged(auth, (user) => {
-                if(user) {
-                    document.getElementById('cloud-status').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-emerald-400"></i> 雲端連線正常`;
-                    listenCloud();
-                    lucide.createIcons();
-                } else {
-                    signInAnonymously(auth);
-                }
-            });
-        };
-
-        window.checkPasscode = () => {
-            if(document.getElementById('passcode-input').value === PASSCODE) {
-                document.getElementById('auth-overlay').classList.add('hidden');
-                document.getElementById('app-content').classList.replace('opacity-0', 'opacity-100');
-            } else {
-                showMessage("❌ 通行碼錯誤", "error");
-            }
-        };
-
-        function listenCloud() {
-            const col = collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords');
-            onSnapshot(col, (snap) => {
-                const newRecs = {};
-                snap.forEach(d => {
-                    const data = d.data();
-                    if(!newRecs[data.batchId]) newRecs[data.batchId] = {};
-                    newRecs[data.batchId][data.date] = data;
-                });
-                cloudRecords = newRecs;
-                render();
-                document.getElementById('last-sync').innerText = "最後同步: " + new Date().toLocaleTimeString();
-            });
-        }
-
-        async function handleFileUpload(e) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const data = new Uint8Array(event.target.result);
-                const wb = XLSX.read(data, { type: 'array' });
-                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "", raw: false, dateNF: 'yyyy-mm-dd' });
-                excelData = json.map(r => {
-                    const nr = {};
-                    Object.keys(r).forEach(k => nr[k.trim()] = r[k]);
-                    return nr;
-                });
-                document.getElementById('excel-count').innerHTML = `<i data-lucide="check-circle" class="w-3 h-3 text-emerald-400"></i> 已載入 ${excelData.length} 筆 Excel 資料`;
-                render();
-                lucide.createIcons();
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function calculateStatus() {
-            const selDate = new Date(selectedDate);
-            const pivotCycles = Math.ceil((selDate - CONFIG.ANCHOR) / (CONFIG.BATCH_INTERVAL * 86400000));
-            const pivotDate = new Date(CONFIG.ANCHOR);
-            pivotDate.setDate(pivotDate.getDate() + (pivotCycles * CONFIG.BATCH_INTERVAL));
-
-            return Array.from({ length: CONFIG.TOTAL_ACTIVE_BATCHES }).map((_, i) => {
-                const theoMating = new Date(pivotDate);
-                theoMating.setDate(theoMating.getDate() - (i * CONFIG.BATCH_INTERVAL));
-                const mYear = theoMating.getFullYear();
-                const fYear = new Date(theoMating.getTime() + CONFIG.GESTATION * 86400000).getFullYear();
-                const diff = Math.round((theoMating - CONFIG.ANCHOR) / (CONFIG.BATCH_INTERVAL * 86400000));
-                const shortId = `G${((Math.floor(diff/7)%9+9)%9+1)}${((diff%7+7)%7+1)}`;
-                const fullId = `${mYear}-${shortId}`;
-                const farrowId = `${fYear}-${shortId}`;
-
-                const match = excelData.find(d => {
-                    const exId = String(d['批次ID'] || d['批次'] || '').toUpperCase();
-                    return exId.includes(fullId) || exId.includes(farrowId) || (exId.includes(shortId) && (exId.includes(String(mYear)) || exId.includes(String(fYear))));
-                });
-
-                const matingDate = match ? (safeStr(match['配種日期'] || match['配種日'])) : theoMating.toISOString().split('T')[0];
-                const farrowTime = new Date(matingDate).getTime() + CONFIG.GESTATION * 86400000;
-                const ageDays = Math.floor((selDate.getTime() - farrowTime) / 86400000);
-
-                let stage = "理論預估", location = "待排程", stageEntryCount = 0, nurseryBase = 0, stageStart = farrowTime;
-                
-                if(match) {
-                    nurseryBase = cleanNum(match["入保育舍豬量"]);
-                    if(cleanNum(match["入大豬舍豬量"]) > 0) {
-                        stage = ageDays > CONFIG.STAGES.B ? "出豬緩衝" : "大豬期";
-                        location = match["大舍"] || match["豬舍"] || "大豬舍";
-                        stageEntryCount = cleanNum(match["入大豬舍豬量"]);
-                        stageStart = farrowTime + CONFIG.STAGES.M * 86400000;
-                    } else if(cleanNum(match["入中豬舍豬量"]) > 0) {
-                        stage = "中豬期"; location = match["中舍"] || match["豬舍"] || "中豬舍";
-                        stageEntryCount = cleanNum(match["入中豬舍豬量"]);
-                        stageStart = farrowTime + CONFIG.STAGES.S * 86400000;
-                    } else if(cleanNum(match["入小豬舍豬量"]) > 0) {
-                        stage = "小豬期"; location = match["小舍"] || match["豬舍"] || "小豬舍";
-                        stageEntryCount = cleanNum(match["入小豬舍豬量"]);
-                        stageStart = farrowTime + CONFIG.STAGES.N * 86400000;
-                    } else if(cleanNum(match["入保育舍豬量"]) > 0) {
-                        stage = "保育期"; location = match["保舍"] || match["豬舍"] || "保一";
-                        stageEntryCount = cleanNum(match["入保育舍豬量"]);
-                        stageStart = farrowTime + CONFIG.STAGES.L * 86400000;
-                    } else {
-                        stage = "哺乳期"; location = match["產房"] || "產房";
-                        stageEntryCount = cleanNum(match["出生頭數"] || match["產仔數"]);
-                        stageStart = farrowTime;
-                    }
-                    if(nurseryBase === 0) nurseryBase = stageEntryCount;
-                }
-
-                const history = cloudRecords[fullId] || {};
-                const loss = Object.keys(history).reduce((acc, d) => {
-                    const rDate = new Date(d);
-                    if(rDate <= selDate) {
-                        acc.abortion += (history[d].abortion || 0);
-                        acc.sow += (history[d].sowDeath || 0);
-                        if(rDate.getTime() >= stageStart) acc.stagePig += (history[d].pigDeath || 0);
-                    }
-                    return acc;
-                }, { abortion: 0, sow: 0, stagePig: 0 });
-
-                return {
-                    id: fullId, matingDate, stage, location, 
-                    headcount: (stageEntryCount || 0) - loss.stagePig, 
-                    nurseryBase, loss, isActual: !!match,
-                    matingCount: match ? cleanNum(match["配種數"] || match["母豬數"]) : 0,
-                    type: i < 7 ? "母豬" : "肉豬",
-                    weekAge: (ageDays/7).toFixed(1)
-                };
-            });
-        }
-
-        function render() {
-            const status = calculateStatus();
-            document.getElementById('stat-farrow').innerText = status.filter(b => b.type === "母豬").reduce((a,b) => a + (b.matingCount - b.loss.abortion - b.loss.sow), 0);
-            document.getElementById('stat-headcount').innerText = status.filter(b => b.type === "肉豬").reduce((a,b) => a + b.headcount, 0).toLocaleString();
-            document.getElementById('stat-match').innerText = status.filter(b => b.isActual).length;
-            document.getElementById('stat-cloud').innerText = Object.keys(cloudRecords).length;
-
-            document.getElementById('sow-container').innerHTML = status.filter(b => b.type === "母豬").map(b => `
-                <div class="bg-white p-6 rounded-[32px] border-2 shadow-sm ${b.isActual ? 'border-indigo-100' : 'border-slate-50 opacity-60'}">
-                    <div class="flex justify-between items-start mb-4">
-                        <div><p class="text-[9px] text-slate-400 italic">配種: ${b.matingDate}</p><h4 class="font-black text-lg">${b.id}</h4></div>
-                        <button onclick="openEditModal('${b.id}', 'sow')" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-indigo-600 active:scale-90 transition-all"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+        {/* 編輯紀錄彈窗 */}
+        {editingBatch && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 font-black font-black">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 font-black">
+              <div className="bg-emerald-800 p-7 text-white flex justify-between items-center font-black"><div><h3 className="text-xl flex items-center gap-2 font-black"><Cloud size={20}/> {safeStr(editingBatch.id)} 損耗錄入</h3><p className="text-emerald-200 text-[10px] uppercase font-bold tracking-widest mt-1 font-black italic">Snapshot Synchronizer v6.3</p></div><button onClick={() => setEditingBatch(null)} className="p-2 hover:bg-white/20 rounded-full transition-all font-black"><X/></button></div>
+              <div className="p-8 space-y-6 font-black font-black font-black">
+                <div className="bg-orange-50 p-5 rounded-3xl border border-orange-100 shadow-sm font-black"><label className="text-[10px] text-orange-600 uppercase flex items-center gap-1 mb-2 font-black font-black"><Calendar size={12}/> 紀錄日期</label><input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full bg-white border-2 border-orange-200 rounded-xl p-3 font-black outline-none focus:border-orange-400 shadow-inner font-black font-black"/></div>
+                <div className="space-y-4 font-black">{editingBatch.type === "母豬" ? (
+                    <div className="grid grid-cols-2 gap-4 font-black">
+                       <RecordInput label="流產" value={records[editingBatch.id]?.[editDate]?.abortion ?? 0} onChange={(v) => saveToCloud(editingBatch.id, editDate, 'abortion', v)} icon={<MinusCircle size={14} className="text-pink-500 font-black"/>}/>
+                       <RecordInput label="陰性" value={records[editingBatch.id]?.[editDate]?.negative ?? 0} onChange={(v) => saveToCloud(editingBatch.id, editDate, 'negative', v)} icon={<MinusCircle size={14} className="text-orange-500 font-black"/>}/>
+                       <div className="col-span-2 font-black font-black"><RecordInput label="母豬死亡/淘汰" value={records[editingBatch.id]?.[editDate]?.sowDeath ?? 0} onChange={(v) => saveToCloud(editingBatch.id, editDate, 'sowDeath', v)} icon={<MinusCircle size={14} className="text-red-500 font-black"/>}/></div>
                     </div>
-                    <div class="space-y-1 mb-4 text-[11px] font-bold">
-                        <div class="flex items-center gap-2 text-slate-500"><i data-lucide="clock" class="w-3 h-3 text-indigo-500"></i>週齡: ${b.weekAge}W</div>
-                        <div class="flex items-center gap-2 text-slate-500"><i data-lucide="warehouse" class="w-3 h-3 text-indigo-500"></i>位置: ${b.location}</div>
-                    </div>
-                    <div class="pt-4 border-t border-slate-50 flex justify-between items-end">
-                        <div><p class="text-[9px] text-slate-400 uppercase">預估產仔</p><p class="text-xl text-indigo-600">${b.matingCount - b.loss.abortion - b.loss.sow} <small class="text-xs">頭</small></p></div>
-                        ${b.loss.abortion > 0 ? `<span class="text-[9px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-lg">流產 -${b.loss.abortion}</span>` : ''}
-                    </div>
+                  ) : <RecordInput label="當日死亡頭數" value={records[editingBatch.id]?.[editDate]?.pigDeath ?? 0} onChange={(v) => saveToCloud(editingBatch.id, editDate, 'pigDeath', v)} icon={<MinusCircle size={14} className="text-pink-600 font-black"/>}/> }
                 </div>
-            `).join('');
+                <button onClick={() => setEditingBatch(null)} className="w-full bg-emerald-700 text-white py-4 rounded-2xl font-black hover:bg-emerald-800 transition-all shadow-xl active:scale-95 font-black uppercase font-black font-black">確認儲存並同步</button>
+              </div>
+            </div>
+          </div>
+        )}
 
-            document.getElementById('pig-table-body').innerHTML = status.filter(b => b.type === "肉豬").map(b => {
-                const sr = b.nurseryBase > 0 ? ((b.headcount / b.nurseryBase) * 100).toFixed(1) : "0.0";
-                return `
-                    <tr class="hover:bg-slate-50/50 transition-all font-black">
-                        <td class="p-6"><div><p class="font-mono text-slate-900">${b.id}</p></div></td>
-                        <td class="p-6"><span class="text-[10px] bg-slate-100 px-2 py-1 rounded-lg mr-2 border border-slate-200">${b.stage}</span><span class="text-slate-600">${b.location}</span></td>
-                        <td class="p-6 text-indigo-600">${b.weekAge}W</td>
-                        <td class="p-6 text-right text-slate-400">${b.nurseryBase}</td>
-                        <td class="p-6 text-right text-rose-500">-${b.loss.stagePig}</td>
-                        <td class="p-6 text-right text-lg text-slate-900">${b.headcount}</td>
-                        <td class="p-6 text-center">
-                            <span class="px-3 py-1 rounded-xl shadow-sm ${parseFloat(sr) < 90 ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}">${sr}%</span>
-                        </td>
-                        <td class="p-6 text-center">
-                            <button onclick="openEditModal('${b.id}', 'pig')" class="p-2 hover:bg-indigo-50 text-indigo-600 rounded-full border border-transparent active:scale-90 transition-all"><i data-lucide="edit-3" class="w-5 h-5"></i></button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-            lucide.createIcons();
-        }
+        {/* 育成率趨勢分析 */}
+        {analysisBatch && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in zoom-in-95 duration-300 font-black font-black">
+            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 font-black font-black">
+              <div className="bg-[#1e293b] p-8 text-white flex justify-between items-center border-b border-white/5 font-black font-black">
+                <div className="flex items-center gap-4 font-black"><div className="bg-blue-500 p-3.5 rounded-2xl shadow-lg text-white shadow-blue-500/20 font-black"><BarChart2 size={28}/></div><div><h3 className="text-2xl tracking-tight uppercase font-black font-black">{safeStr(analysisBatch.id)} 趨勢分析</h3><p className="text-slate-400 text-[10px] uppercase tracking-widest mt-1 font-black font-black">Phase Snapshot Intelligence</p></div></div>
+                <button onClick={() => setAnalysisBatch(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all font-black"><X/></button>
+              </div>
+              <div className="p-10 space-y-10 font-black font-black">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-black text-center font-black font-black font-black">
+                    <AnalysisMetric label="累計育成率 (保育基準)" value={`${(analysisBatch.headcount/(analysisBatch.nurseryEntryBase || 1)*100).toFixed(1)}%`} color={analysisBatch.headcount/(analysisBatch.nurseryEntryBase || 1) < 0.9 ? 'text-pink-600 font-black' : 'text-emerald-600 font-black'} />
+                    <AnalysisMetric label="本階段累計死亡" value={analysisBatch.cumulativeLoss.stageSpecificDeath} unit="頭" color="text-slate-800 font-black" />
+                    <AnalysisMetric label="保育入舍基準" value={analysisBatch.nurseryEntryBase} unit="頭" color="text-slate-800 font-black font-black font-black" />
+                </div>
+                <div className="bg-white rounded-[2.5rem] border border-slate-100 p-10 h-80 shadow-inner font-black font-black">
+                    {Object.keys(records[analysisBatch.id] || {}).length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={Object.keys(records[analysisBatch.id]).sort().map(d => ({ 
+                                date: d.slice(5), 
+                                survival: Number(((analysisBatch.nurseryEntryBase - Object.keys(records[analysisBatch.id]).filter(k => k <= d).reduce((s, k) => s + (records[analysisBatch.id][k].pigDeath || 0), 0)) / (analysisBatch.nurseryEntryBase || 1) * 100).toFixed(1)),
+                                death: records[analysisBatch.id][d].pigDeath || 0 
+                            }))}>
+                                <defs><linearGradient id="colorSr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/><XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 900, fill: '#64748b'}}/><YAxis hide domain={[0, 100]}/>
+                                <Tooltip/><Area type="monotone" dataKey="survival" name="育成率(%)" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorSr)" />
+                                <Bar dataKey="death" name="當日死亡" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={24} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : <div className="h-full flex flex-col items-center justify-center text-slate-300 italic font-black gap-3 opacity-30 font-sans uppercase tracking-widest font-black font-black font-black font-black font-black font-black font-black"><SearchX size={48}/><p>尚未錄入任何死亡數據</p></div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
 
-        window.openEditModal = (batchId, type) => {
-            editingBatchId = batchId;
-            document.getElementById('modal-batch-id').innerText = batchId;
-            document.getElementById('modal-date').value = selectedDate;
-            const inputs = document.getElementById('modal-inputs');
-            const data = cloudRecords[batchId]?.[selectedDate] || {};
-            
-            if(type === 'sow') {
-                inputs.innerHTML = `
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[10px] text-slate-400">流產</label><input type="number" id="inp-abortion" value="${data.abortion||0}" class="w-full p-3 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500/20 text-xl font-black"></div>
-                        <div><label class="text-[10px] text-slate-400">測孕陰性</label><input type="number" id="inp-negative" value="${data.negative||0}" class="w-full p-3 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500/20 text-xl font-black"></div>
-                        <div class="col-span-2"><label class="text-[10px] text-slate-400">母豬死亡/淘汰</label><input type="number" id="inp-sowdeath" value="${data.sowDeath||0}" class="w-full p-3 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500/20 text-xl font-black"></div>
-                    </div>
-                `;
-            } else {
-                inputs.innerHTML = `<div><label class="text-[10px] text-slate-400">當日死亡頭數</label><input type="number" id="inp-pigdeath" value="${data.pigDeath||0}" class="w-full p-3 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500/20 text-center text-4xl font-black"></div>`;
-            }
-            document.getElementById('edit-modal').classList.remove('hidden');
-            lucide.createIcons();
-        };
+// --- 子組件 ---
+const RecordInput = ({ label, value, onChange, icon }) => (
+  <div className="space-y-1.5 font-black font-black font-black"><label className="text-[10px] text-slate-500 uppercase flex items-center gap-1.5 font-black font-black font-black">{icon} {label}</label>
+  <input type="number" value={value} placeholder="0" onChange={(e) => onChange(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3.5 text-2xl text-slate-800 outline-none focus:border-emerald-500 text-center transition-all font-black font-black font-black"/></div>
+);
+const StatCard = ({ title, value, unit, color, icon }) => (
+  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-start justify-between group hover:shadow-xl transition-all font-black text-left font-black font-black"><div><p className="text-slate-400 text-[10px] font-black mb-1 uppercase tracking-widest font-black">{title}</p><div className="flex items-baseline gap-1 font-black text-2xl font-black font-black font-black"><span className={`text-${color}-600 tracking-tighter font-black`}>{value}</span><span className="text-[10px] text-slate-400 font-black uppercase ml-1 font-black">{unit}</span></div></div><div className={`p-3 rounded-2xl bg-${color}-50 text-${color}-600 font-black`}>{icon}</div></div>
+);
+const TabButton = ({ active, onClick, label }) => (
+  <button onClick={onClick} className={`px-7 py-2.5 rounded-2xl text-[12px] font-black transition-all ${active ? 'bg-slate-900 text-white shadow-xl scale-105' : 'text-slate-500 hover:bg-white'} font-black font-black font-black`}>{label}</button>
+);
+const AnalysisMetric = ({ label, value, unit, color }) => (
+    <div className="bg-slate-50 p-6 rounded-[1.8rem] border border-slate-100 shadow-sm font-black font-black font-black"><span className="text-[10px] text-slate-400 uppercase tracking-widest mb-1 block font-black font-black font-black">{label}</span><div className="flex items-baseline justify-center gap-1 font-black font-black font-black"><span className={`text-4xl ${color} font-black font-black font-black`}>{value}</span>{unit && <span className="text-sm font-bold text-slate-400 ml-1 font-black font-black font-black">{unit}</span>}</div></div>
+);
+const BatchCard = ({ batch, onEdit }) => {
+  const lossRate = batch.matingCount > 0 ? (batch.matingCount - batch.estFarrowing) / batch.matingCount : 0;
+  return (
+    <div className={`bg-white p-6 rounded-[2rem] border-2 transition-all relative shadow-sm font-black font-black ${batch.isActual ? 'border-emerald-500/30' : 'border-slate-100'}`}><div className="flex justify-between items-start mb-4 font-black font-black"><div><span className="text-[9px] font-black uppercase text-slate-400 italic font-black">配種日：{safeStr(batch.matingDate)}</span><h4 className="font-mono font-black text-slate-800 tracking-tighter font-black font-black">{safeStr(batch.id)}</h4></div><button onClick={onEdit} className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm active:scale-90 font-black font-black"><Edit3 size={14}/></button></div><div className="space-y-2 mb-4 text-[11px] font-bold text-slate-500 font-black font-black font-black font-black"><div className="flex items-center gap-2 font-black font-black font-black font-black font-black"><Clock size={12} className="text-blue-500 font-black font-black"/>{batch.weekAge}W ({batch.monthAge}Mo)</div><div className="flex items-center gap-2 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><Warehouse size={12} className="text-slate-300 font-black font-black"/>{safeStr(batch.location)}</div></div><div className="pt-4 border-t border-slate-50 flex justify-between items-end font-black font-black font-black font-black font-black font-black"><div className="flex flex-col font-black font-black font-black font-black font-black font-black font-black font-black"><span className="text-[9px] text-slate-400 font-black uppercase font-black font-black font-black font-black"> {batch.type === '母豬' ? '預估分娩' : '當前產仔'} </span><span className={`text-xl font-black ${lossRate > 0.1 ? 'text-pink-600' : 'text-emerald-700'} font-black font-black`}>{batch.type === '母豬' ? batch.estFarrowing : (batch.headcount || batch.initialHeadcount)} <small className="text-[10px] font-black ml-1 font-black font-black">頭</small></span></div>{lossRate > 0.1 && <div className="text-[8px] bg-pink-100 text-pink-600 px-2 py-0.5 rounded font-black animate-pulse flex items-center gap-1 font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><AlertTriangle size={10}/> 損耗 {(lossRate*100).toFixed(0)}%</div>}</div></div>
+  );
+};
 
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-
-        window.saveLossRecord = async () => {
-            const date = document.getElementById('modal-date').value;
-            const payload = { batchId: editingBatchId, date: date, updatedAt: new Date().toISOString() };
-            if(document.getElementById('inp-abortion')) {
-                payload.abortion = cleanNum(document.getElementById('inp-abortion').value);
-                payload.negative = cleanNum(document.getElementById('inp-negative').value);
-                payload.sowDeath = cleanNum(document.getElementById('inp-sowdeath').value);
-            } else {
-                payload.pigDeath = cleanNum(document.getElementById('inp-pigdeath').value);
-            }
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${editingBatchId}_${date}`), payload);
-            showMessage("✅ 雲端數據已同步完成");
-            closeEditModal();
-        };
-
-        window.exportCurrentData = () => {
-            const status = calculateStatus();
-            const exportData = status.map(b => ({
-                '批次ID': b.id, '配種日期': b.matingDate, '當前階段': b.stage, '畜舍位置': b.location,
-                '入保育量': b.nurseryBase, '當前存欄': b.headcount, '育成率': ((b.headcount/(b.nurseryBase||1))*100).toFixed(1) + '%'
-            }));
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "生產日快報");
-            XLSX.writeFile(wb, `永隆牧場生產報告_${selectedDate}.xlsx`);
-        };
-
-        function showMessage(msg, type='info') {
-            const b = document.getElementById('msg-box');
-            b.innerText = msg;
-            b.className = `fixed top-10 left-1/2 -translate-x-1/2 z-[6000] px-8 py-4 rounded-2xl shadow-2xl font-black animate-fade ${type === 'error' ? 'bg-rose-600' : 'bg-slate-900'} text-white`;
-            b.classList.remove('hidden');
-            setTimeout(() => b.classList.add('hidden'), 3000);
-        }
-
-        const safeStr = (v) => v instanceof Date ? v.toISOString().split('T')[0] : String(v ?? "").trim();
-        const cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
-    </script>
-</body>
-</html>
+export default App;
