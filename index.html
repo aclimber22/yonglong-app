@@ -362,6 +362,54 @@
         let editingBatchId = null;
         let currentBatchForTransfer = null;
 
+        // --- 圖表插件定義 ---
+        const phaseBackgroundPlugin = {
+            id: 'phaseBackground',
+            beforeDraw: (chart) => {
+                const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+                const phases = [
+                    { start: 0, end: 4, color: 'rgba(241, 245, 249, 0.4)' },
+                    { start: 4, end: 11, color: 'rgba(252, 211, 77, 0.15)' },
+                    { start: 11, end: 19, color: 'rgba(110, 231, 183, 0.15)' },
+                    { start: 19, end: 24, color: 'rgba(147, 197, 253, 0.15)' },
+                    { start: 24, end: 100, color: 'rgba(196, 181, 253, 0.15)' }
+                ];
+                ctx.save();
+                phases.forEach(p => {
+                    const startX = x.getPixelForValue(p.start - 1);
+                    const endX = x.getPixelForValue(p.end - 1);
+                    if (startX >= left || endX <= right) {
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(Math.max(startX, left), top, Math.min(endX, right) - Math.max(startX, left), bottom - top);
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
+        const currentWeekMarkerPlugin = {
+            id: 'currentWeekMarker',
+            afterDraw: (chart, args, options) => {
+                const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+                const week = options.week;
+                if (week >= 1 && week <= chart.data.labels.length) {
+                    const xPos = x.getPixelForValue(week - 1);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 5]);
+                    ctx.moveTo(xPos, top);
+                    ctx.lineTo(xPos, bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#4338ca'; 
+                    ctx.stroke();
+                    ctx.fillStyle = '#4338ca';
+                    ctx.font = '900 11px Noto Sans TC';
+                    ctx.fillText(`目前 W${week}`, xPos + 5, top + 20);
+                    ctx.restore();
+                }
+            }
+        };
+
         window.safeStr = (v) => {
             if (v instanceof Date) return v.toISOString().split('T')[0];
             if (typeof v === 'number' && v > 40000) return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
@@ -369,6 +417,7 @@
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
 
+        // --- 主要邏輯函數 ---
         window.checkPasscode = () => {
             const val = document.getElementById('passcode-input').value;
             if(val === PASSCODE || val === "8888") {
@@ -476,10 +525,12 @@
                 const sheet = wb.Sheets[sheetName];
                 const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                 const headerRow = (rows[0] || []).map(v => String(v ?? "").trim()).filter(v => v !== "");
+                
                 if (headerRow.length === 0) { showMessage("❌ 檔案內容為空", "error"); return; }
                 const expectedHeaders = CONFIG.BASIC_HEADERS;
                 const missing = expectedHeaders.filter(h => !headerRow.includes(h));
                 const extra = headerRow.filter(h => !expectedHeaders.includes(h));
+
                 if (missing.length > 0 || extra.length > 0 || headerRow.length !== expectedHeaders.length) {
                     let errMsg = "❌ 格式有誤：";
                     if (missing.length > 0) errMsg += `缺少 [${missing.join(', ')}] `;
@@ -551,7 +602,7 @@
                     } else if(basicRow['入中豬舍豬量'] > 0) {
                         stage = "中豬期"; location = basicRow['中舍'];
                         stageEntryCount = basicRow['入中豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.S * 86400000;
-                    } else if(basicRow['入小豬舍豬量'] > 0) {
+                    } else if(basicRow['入小豬舍豬量'] > 0 || basicRow['入新女舍種豬量'] > 0) {
                         stage = "小豬期"; location = basicRow['小舍'];
                         stageEntryCount = basicRow['入小豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.N * 86400000;
                     } else if(basicRow['入保育舍豬量'] > 0) {
@@ -620,7 +671,6 @@
         window.openTransferModal = () => {
             const status = calculateStatus();
             const list = document.getElementById('transfer-batch-list');
-            // 只列出在保育期 (W4+) 或之後的實際批次
             const candidates = status.filter(b => b.isActual && parseFloat(b.weekAge) >= 3.5);
             list.innerHTML = candidates.map(b => `
                 <button onclick='window.selectTransferBatch("${encodeURIComponent(JSON.stringify(b))}")' class="p-4 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-blue-50 hover:border-blue-200 transition-all text-left">
@@ -635,7 +685,7 @@
         window.selectTransferBatch = (encoded) => {
             currentBatchForTransfer = JSON.parse(decodeURIComponent(encoded));
             document.getElementById('transfer-count').value = currentBatchForTransfer.headcount;
-            document.getElementById('transfer-meat-count').value = currentBatchForTransfer.headcount; // 預設全部進肉豬線
+            document.getElementById('transfer-meat-count').value = currentBatchForTransfer.headcount;
             document.getElementById('transfer-gilt-count').value = 0;
             document.getElementById('split-current-headcount').innerText = currentBatchForTransfer.headcount;
             showMessage(`已選取批次 ${currentBatchForTransfer.id}`);
@@ -651,7 +701,6 @@
             const updateData = { id: currentBatchForTransfer.id, updatedAt: new Date().toISOString() };
 
             if (target === 'small') {
-                // 實施 W11 分流守恆驗證
                 const total = meatCount + giltCount;
                 if (total !== currentBatchForTransfer.headcount) {
                     return alert(`❌ 守恆驗證失敗：\n分流總數 (${total}) 不等於當前存欄 (${currentBatchForTransfer.headcount})\n\n請確認：肉豬 (${meatCount}) + 新女豬 (${giltCount}) = 總數。`);
@@ -668,12 +717,68 @@
             document.getElementById('transfer-modal').classList.add('hidden');
         };
 
+        // --- 分析 Modal 與圖表邏輯 ---
+        window.openAnalysisModal = (encodedBatch) => {
+            const batch = JSON.parse(decodeURIComponent(encodedBatch));
+            document.getElementById('analysis-batch-id').innerText = batch.id;
+            const totalSr = batch.nurseryBase > 0 ? ((batch.headcount / batch.nurseryBase) * 100).toFixed(1) : '0';
+            document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
+            
+            const week = parseFloat(batch.weekAge);
+            const resetBoxes = () => {
+                ['nursery', 'small', 'medium'].forEach(s => {
+                    const box = document.getElementById(`box-${s}`);
+                    if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
+                    const status = document.getElementById(`status-${s}`);
+                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black"; }
+                });
+            };
+            resetBoxes();
+
+            const getRateStr = (next, cur, swMin, swMax) => {
+                if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
+                if (week >= swMin && week < swMax) return { rate: ((batch.headcount / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
+                return { rate: ((next / (cur || 1)) * 100).toFixed(1) + '%', status: '已結算', cur: false };
+            };
+
+            const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
+            const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
+            const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
+
+            const upBox = (id, data, color) => {
+                const box = document.getElementById(`box-${id}`); const status = document.getElementById(`status-${id}`); const rate = document.getElementById(`rate-${id}`);
+                if (rate) rate.innerText = data.rate;
+                if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
+                else if(data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
+            };
+            upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
+            document.getElementById('analysis-modal').classList.remove('hidden');
+
+            const birthDate = new Date(batch.farrowingDate); const maxW = Math.max(12, Math.ceil(week) + 2);
+            const labels = Array.from({length: maxW}, (_, i) => i + 1); const deaths = Array(maxW).fill(0); const survRate = [];
+            Object.keys(batch.history).forEach(d => {
+                const diff = Math.floor((new Date(d) - birthDate) / 86400000);
+                if(diff >= 0) { const w = Math.floor(diff/7); if(w < maxW) deaths[w] += (batch.history[d].pigDeath || 0); }
+            });
+            let curS = batch.nurseryBase;
+            deaths.forEach(d => { curS -= d; survRate.push(((curS/(batch.nurseryBase||1))*100).toFixed(1)); });
+
+            if(chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(document.getElementById('lifecycle-chart').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets: [ { label: '存活曲線 (%)', data: survRate, type: 'line', borderColor: '#3b82f6', yAxisID: 'y1', tension: 0.4, borderWidth: 4, pointRadius: 2 }, { label: '週死亡總數 (頭)', data: deaths, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y2', barThickness: 15 } ] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { weight: '900' } } }, currentWeekMarker: { week: Math.round(week) } }, scales: { y1: { min: 0, max: 100, ticks: { font: { weight: '900' } } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { weight: '900' } } }, x: { title: { display: true, text: '生長週齡 (W)', font: { weight: '900' } }, ticks: { font: { weight: '900' } } } } },
+                plugins: [phaseBackgroundPlugin, currentWeekMarkerPlugin]
+            });
+        };
+
+        window.render = render;
         function render() {
             const status = calculateStatus();
             const updateUI = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
             updateUI('stat-farrow', status.filter(b => b.type === "母豬").reduce((a,b) => a + b.estFarrowing, 0));
             updateUI('stat-headcount', status.filter(b => b.type === "肉豬").reduce((a,b) => a + b.headcount, 0).toLocaleString());
-            updateUI('stat-gilt', status.reduce((acc, b) => acc + (b.giltCount || 0), 0)); // 計算全場新女豬
+            updateUI('stat-gilt', status.reduce((acc, b) => acc + (b.giltCount || 0), 0));
             updateUI('stat-match', status.filter(b => b.isActual).length);
             updateUI('stat-cloud', Object.values(cloudRecords).reduce((acc, b) => acc + Object.keys(b).length, 0));
 
@@ -721,55 +826,7 @@
             lucide.createIcons();
         }
 
-        // 其餘圖表、修改日誌等邏輯保持原樣...
-        window.openAnalysisModal = (encodedBatch) => {
-            const batch = JSON.parse(decodeURIComponent(encodedBatch));
-            document.getElementById('analysis-batch-id').innerText = batch.id;
-            const totalSr = batch.nurseryBase > 0 ? ((batch.headcount / batch.nurseryBase) * 100).toFixed(1) : '0';
-            document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
-            const week = parseFloat(batch.weekAge);
-            const resetBoxes = () => {
-                ['nursery', 'small', 'medium'].forEach(s => {
-                    const box = document.getElementById(`box-${s}`);
-                    if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
-                    const status = document.getElementById(`status-${s}`);
-                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black"; }
-                });
-            };
-            resetBoxes();
-            const getRateStr = (next, cur, swMin, swMax) => {
-                if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
-                if (week >= swMin && week < swMax) return { rate: ((batch.headcount / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
-                return { rate: ((next / (cur || 1)) * 100).toFixed(1) + '%', status: '已結算', cur: false };
-            };
-            const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
-            const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
-            const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
-            const upBox = (id, data, color) => {
-                const box = document.getElementById(`box-${id}`); const status = document.getElementById(`status-${id}`); const rate = document.getElementById(`rate-${id}`);
-                if (rate) rate.innerText = data.rate;
-                if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
-                else if(data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
-            };
-            upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
-            document.getElementById('analysis-modal').classList.remove('hidden');
-            const birthDate = new Date(batch.farrowingDate); const maxW = Math.max(12, Math.ceil(week) + 2);
-            const labels = Array.from({length: maxW}, (_, i) => i + 1); const deaths = Array(maxW).fill(0); const survRate = [];
-            Object.keys(batch.history).forEach(d => {
-                const diff = Math.floor((new Date(d) - birthDate) / 86400000);
-                if(diff >= 0) { const w = Math.floor(diff/7); if(w < maxW) deaths[w] += (batch.history[d].pigDeath || 0); }
-            });
-            let curS = batch.nurseryBase;
-            deaths.forEach(d => { curS -= d; survRate.push(((curS/(batch.nurseryBase||1))*100).toFixed(1)); });
-            if(chartInstance) chartInstance.destroy();
-            chartInstance = new Chart(document.getElementById('lifecycle-chart').getContext('2d'), {
-                type: 'bar',
-                data: { labels, datasets: [ { label: '存活曲線 (%)', data: survRate, type: 'line', borderColor: '#3b82f6', yAxisID: 'y1', tension: 0.4, borderWidth: 4, pointRadius: 2 }, { label: '週死亡總數 (頭)', data: deaths, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y2', barThickness: 15 } ] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { weight: '900' } } }, currentWeekMarker: { week: Math.round(week) } }, scales: { y1: { min: 0, max: 100, ticks: { font: { weight: '900' } } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { weight: '900' } } }, x: { title: { display: true, text: '生長週齡 (W)', font: { weight: '900' } }, ticks: { font: { weight: '900' } } } } },
-                plugins: [phaseBackgroundPlugin, currentWeekMarkerPlugin]
-            });
-        };
-
+        // --- 其餘通用函數掛載 ---
         window.openSmartMatingModal = () => {
             const today = new Date(); const diff = today.getTime() - CONFIG.ANCHOR.getTime(); const cycles = Math.ceil(diff / (21 * 86400000));
             const suggestDate = new Date(CONFIG.ANCHOR.getTime() + cycles * 21 * 86400000); const suggestDiff = Math.round((suggestDate - CONFIG.ANCHOR) / (21 * 86400000));
