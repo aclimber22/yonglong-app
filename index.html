@@ -24,17 +24,48 @@
 </head>
 <body class="min-h-screen pb-24 font-black">
 
-    <!-- 1. 密碼驗證層 -->
+    <!-- 1. 密碼與 Google 登入驗證層 -->
     <div id="auth-overlay" class="fixed inset-0 z-[5000] bg-slate-900 flex items-center justify-center p-6 transition-all duration-700">
         <div class="max-w-md w-full bg-white rounded-[48px] p-10 shadow-2xl text-center animate-fade font-black">
             <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl mx-auto flex items-center justify-center mb-8">
                 <i data-lucide="shield-check" class="w-10 h-10 font-black"></i>
             </div>
             <h2 class="text-3xl font-black mb-2 tracking-tighter text-slate-900 font-black">永隆智慧中心</h2>
-            <p class="text-slate-400 font-bold text-sm mb-8 uppercase tracking-widest font-black">Master Passcode Required</p>
+            <p class="text-slate-400 font-bold text-sm mb-8 uppercase tracking-widest font-black">Authorized Access Only</p>
+            
+            <!-- Google 登入按鈕 -->
+            <button id="google-login-btn" onclick="window.loginWithGoogle()" class="w-full py-5 bg-white border-2 border-slate-200 text-slate-700 rounded-2xl font-black text-lg active:scale-95 flex items-center justify-center gap-3 hover:bg-slate-50 transition-all mb-4">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6">
+                使用 Google 帳號登入
+            </button>
+
+            <div class="flex items-center gap-4 my-6 text-slate-300">
+                <div class="h-[1px] flex-1 bg-slate-100"></div>
+                <span class="text-[10px] uppercase font-bold tracking-widest">or use passcode</span>
+                <div class="h-[1px] flex-1 bg-slate-100"></div>
+            </div>
+
             <input type="password" id="passcode-input" placeholder="••••••" 
                    class="w-full px-6 py-5 bg-slate-50 rounded-2xl text-center text-3xl font-black mb-8 outline-none border-2 border-transparent focus:border-indigo-500 tracking-[0.3em] transition-all font-black">
             <button onclick="window.checkPasscode()" class="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg active:scale-95 shadow-xl hover:bg-indigo-700 transition-all uppercase font-black">進入管理系統</button>
+            
+            <!-- 錯誤訊息提示區 -->
+            <div id="auth-error-container" class="mt-6 p-5 bg-rose-50 rounded-2xl hidden animate-fade border-2 border-rose-200 text-left">
+                <div class="flex items-center gap-2 text-rose-600 mb-2">
+                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                    <span class="font-black text-sm uppercase">系統安全警報</span>
+                </div>
+                <p id="auth-error" class="text-rose-700 text-xs font-black leading-relaxed"></p>
+                <div id="setup-guide" class="hidden mt-4 pt-4 border-t border-rose-200">
+                    <p class="text-[10px] text-rose-500 font-bold mb-2">解決方案：</p>
+                    <ol class="text-[10px] text-rose-600 list-decimal pl-4 space-y-1">
+                        <li>前往 Firebase Console > Authentication</li>
+                        <li>進入 Settings > Authorized Domains</li>
+                        <li>新增此網域：<strong id="current-hostname" class="bg-rose-100 px-1 rounded"></strong></li>
+                    </ol>
+                </div>
+                <button onclick="window.location.reload()" class="mt-4 w-full py-2 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-rose-700 transition-all">嘗試重新連接</button>
+            </div>
         </div>
     </div>
 
@@ -49,6 +80,7 @@
                 <span id="excel-count" class="flex items-center gap-1.5"><i data-lucide="file-warning" class="w-3 h-3"></i> 尚未載入檔案</span>
             </div>
             <div class="flex items-center gap-4">
+                <span id="user-display" class="text-indigo-400"></span>
                 <button onclick="window.clearCloudDatabase()" class="text-rose-400 hover:text-rose-300 transition-colors uppercase cursor-pointer">[ ⚠️ 重置雲端資料 ]</button>
                 <span id="last-sync" class="opacity-60 italic text-[9px]"></span>
             </div>
@@ -59,7 +91,7 @@
                 <div class="flex items-center gap-4">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900">永隆智慧管理 <span class="text-indigo-600 italic">v9.5</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900">永隆智慧管理 <span class="text-indigo-600 italic">v9.6</span></h1>
                         <div class="flex items-center gap-2">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -114,7 +146,6 @@
                     </div>
                     <div class="bg-orange-50 p-3 rounded-2xl text-orange-600"><i data-lucide="trending-up"></i></div>
                 </div>
-                <!-- 新女豬看板 -->
                 <button onclick="window.openGiltInventoryModal()" class="bg-white p-6 rounded-[32px] border border-pink-100 shadow-sm flex items-center justify-between hover:bg-pink-50 transition-all text-left">
                     <div>
                         <p class="text-slate-400 text-[10px] uppercase mb-1">目前新女豬總頭數</p>
@@ -247,6 +278,48 @@
         </div>
     </div>
 
+    <!-- 智慧轉舍 Modal -->
+    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade">
+            <div class="bg-blue-600 p-10 text-white flex justify-between items-center">
+                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
+                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8"></i></button>
+            </div>
+            <div class="p-10 space-y-8">
+                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block font-black">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-[10px] text-slate-400 uppercase mb-2 block font-black">目標畜舍</label>
+                        <select id="transfer-target" onchange="window.onTransferTargetChange()" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
+                            <option value="nursery">保育舍</option>
+                            <option value="small">小豬舍 (觸發 W11 分流)</option>
+                            <option value="medium">中豬舍</option>
+                            <option value="large">大豬舍</option>
+                        </select>
+                    </div>
+                    <div id="normal-count-field">
+                        <label class="text-[10px] text-slate-400 uppercase mb-2 block font-black">實際轉入數量</label>
+                        <input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl">
+                    </div>
+                </div>
+                <div id="split-fields" class="hidden grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[32px] border-2 border-dashed border-blue-200">
+                    <div>
+                        <label class="text-[10px] text-blue-600 uppercase mb-2 block font-black">入小豬舍豬量 (肉豬線)</label>
+                        <input type="number" id="transfer-meat-count" placeholder="0" class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-500 font-black text-xl">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-pink-600 uppercase mb-2 block font-black">入新女舍種豬量 (新女線)</label>
+                        <input type="number" id="transfer-gilt-count" placeholder="0" class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-pink-500 font-black text-xl">
+                    </div>
+                    <div class="col-span-2 text-center text-[10px] text-slate-400 font-black">
+                        ⚠️ 守恆提醒：分流總數應等於批次當前存欄 <span id="split-current-headcount" class="text-blue-600">0</span> 頭
+                    </div>
+                </div>
+                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase">確認並寫入基本資料</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 錄入損耗 Modal -->
     <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade">
@@ -286,54 +359,12 @@
         </div>
     </div>
 
-    <!-- 智慧轉舍 Modal (優化分流邏輯) -->
-    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade">
-            <div class="bg-blue-600 p-10 text-white flex justify-between items-center">
-                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
-                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8"></i></button>
-            </div>
-            <div class="p-10 space-y-8">
-                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block font-black">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
-                <div class="grid grid-cols-2 gap-6">
-                    <div>
-                        <label class="text-[10px] text-slate-400 uppercase mb-2 block font-black">目標畜舍</label>
-                        <select id="transfer-target" onchange="window.onTransferTargetChange()" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
-                            <option value="nursery">保育舍</option>
-                            <option value="small">小豬舍 (觸發 W11 分流)</option>
-                            <option value="medium">中豬舍</option>
-                            <option value="large">大豬舍</option>
-                        </select>
-                    </div>
-                    <div id="normal-count-field">
-                        <label class="text-[10px] text-slate-400 uppercase mb-2 block font-black">實際轉入數量</label>
-                        <input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl">
-                    </div>
-                </div>
-                <!-- W11 分流專用欄位 -->
-                <div id="split-fields" class="hidden grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[32px] border-2 border-dashed border-blue-200">
-                    <div>
-                        <label class="text-[10px] text-blue-600 uppercase mb-2 block font-black">入小豬舍豬量 (肉豬線)</label>
-                        <input type="number" id="transfer-meat-count" placeholder="0" class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-500 font-black text-xl">
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-pink-600 uppercase mb-2 block font-black">入新女舍種豬量 (新女線)</label>
-                        <input type="number" id="transfer-gilt-count" placeholder="0" class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-pink-500 font-black text-xl">
-                    </div>
-                    <div class="col-span-2 text-center text-[10px] text-slate-400 font-black">
-                        ⚠️ 守恆提醒：分流總數應等於批次當前存欄 <span id="split-current-headcount" class="text-blue-600">0</span> 頭
-                    </div>
-                </div>
-                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase">確認並寫入基本資料</button>
-            </div>
-        </div>
-    </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- Firebase 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyBd-t01YqCEJorVA3Pguz_z2qfOIKhVJ28", 
             authDomain: "yonglong-farm.firebaseapp.com",
@@ -344,6 +375,7 @@
         };
         const PASSCODE = "YL2025";
         const APP_ID = "yonglong-production-main";
+        const ADMIN_EMAIL = "jason@yl-pmp.com";
 
         const CONFIG = {
             BATCH_INTERVAL: 21,
@@ -354,13 +386,18 @@
             BASIC_HEADERS: ['批次','配種日期','分娩日期','配種數','預分娩數','活仔數','離乳數','保舍','入保育舍豬量','小舍','入新女舍種豬量','入小豬舍豬量','中舍','入中豬舍豬量','大舍','入大豬舍豬量','出豬量']
         };
 
-        let db, auth, chartInstance = null;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
         let excelData = [];
         let manualBatches = {};
         let cloudRecords = {};
         let selectedDate = new Date().toISOString().split('T')[0];
         let editingBatchId = null;
         let currentBatchForTransfer = null;
+        let chartInstance = null;
 
         // --- 圖表插件定義 ---
         const phaseBackgroundPlugin = {
@@ -410,6 +447,65 @@
             }
         };
 
+        // --- 安全與登入邏輯 (優化對 unauthorized-domain 錯誤的引導) ---
+        window.loginWithGoogle = async () => {
+            const errEl = document.getElementById('auth-error');
+            const errCont = document.getElementById('auth-error-container');
+            const guide = document.getElementById('setup-guide');
+            const hostnameEl = document.getElementById('current-hostname');
+            
+            try {
+                errCont.classList.add('hidden');
+                guide.classList.add('hidden');
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+                if (user.email === ADMIN_EMAIL) {
+                    handleAuthSuccess(user);
+                } else {
+                    errEl.innerText = `❌ 權限不足：[${user.email}] 非指定負責人。`;
+                    errCont.classList.remove('hidden');
+                    await auth.signOut();
+                }
+            } catch (error) {
+                console.error("登入失敗", error);
+                errCont.classList.remove('hidden');
+                
+                if (error.code === 'auth/unauthorized-domain') {
+                    errEl.innerHTML = `❌ <strong>登入受阻：網域未授權</strong><br>此網址目前的通訊請求被 Firebase 拒絕。`;
+                    hostnameEl.innerText = window.location.hostname;
+                    guide.classList.remove('hidden');
+                } else if (error.code === 'auth/popup-closed-by-user') {
+                    errEl.innerText = "❌ 登入視窗已關閉，請重試。";
+                } else {
+                    errEl.innerText = `❌ 登入錯誤：${error.message}`;
+                }
+            }
+        };
+
+        window.checkPasscode = () => {
+            const val = document.getElementById('passcode-input').value;
+            const errEl = document.getElementById('auth-error');
+            const errCont = document.getElementById('auth-error-container');
+            if(val === PASSCODE || val === "8888") {
+                handleAuthSuccess({ displayName: "管理員 (通行碼)", email: "Passcode" });
+            } else { 
+                errEl.innerText = "❌ 通行碼錯誤。";
+                errCont.classList.remove('hidden');
+            }
+        };
+
+        function handleAuthSuccess(user) {
+            document.getElementById('auth-overlay').classList.add('hidden');
+            document.getElementById('app-content').classList.replace('hidden', 'block');
+            document.getElementById('user-display').innerText = `👤 ${user.displayName}`;
+            setTimeout(() => {
+                document.getElementById('app-content').classList.replace('opacity-0', 'opacity-100');
+                lucide.createIcons();
+                listenCloud();
+            }, 50);
+        }
+
+        // --- 全域工具 ---
         window.safeStr = (v) => {
             if (v instanceof Date) return v.toISOString().split('T')[0];
             if (typeof v === 'number' && v > 40000) return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
@@ -417,82 +513,14 @@
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
 
-        // --- 主要邏輯函數 ---
-        window.checkPasscode = () => {
-            const val = document.getElementById('passcode-input').value;
-            if(val === PASSCODE || val === "8888") {
-                document.getElementById('auth-overlay').classList.add('hidden');
-                document.getElementById('app-content').classList.replace('hidden', 'block');
-                setTimeout(() => {
-                    document.getElementById('app-content').classList.replace('opacity-0', 'opacity-100');
-                    lucide.createIcons();
-                }, 50);
-            } else { alert("❌ 通行碼錯誤"); }
-        };
-
-        window.switchView = (m) => {
-            document.getElementById('view-inventory').classList.toggle('hidden', m !== 'inventory');
-            document.getElementById('view-raw').classList.toggle('hidden', m !== 'raw');
-            const invBtn = document.getElementById('tab-inventory');
-            const rawBtn = document.getElementById('tab-raw');
-            if (m === 'inventory') {
-                invBtn.className = "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black";
-                rawBtn.className = "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
-            } else {
-                rawBtn.className = "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black";
-                invBtn.className = "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
-                window.renderRawTable();
-            }
-        };
-
-        window.renderRawTable = () => {
-            const table = document.getElementById('raw-table');
-            const status = calculateStatus();
-            const data = status.filter(b => b.isActual).map(b => b.basicRow);
-            if(data.length === 0) return table.innerHTML = "<tr><td class='p-20 text-center text-slate-300 italic font-black'>無基本紀錄資料</td></tr>";
-            const search = document.getElementById('raw-search').value.toUpperCase();
-            const headers = CONFIG.BASIC_HEADERS;
-            const filtered = data.filter(r => Object.values(r).some(v => String(v).toUpperCase().includes(search)));
-            table.innerHTML = `
-                <thead class="bg-slate-900 text-white font-black sticky top-0 uppercase">
-                    <tr>${headers.map(h => `<th class="p-4 whitespace-nowrap">${h}</th>`).join('')}</tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 text-slate-600 font-black">
-                    ${filtered.map(r => `<tr>${headers.map(h => `<td class="p-4 whitespace-nowrap">${window.safeStr(r[h])}</td>`).join('')}</tr>`).join('')}
-                </tbody>`;
-        };
-
-        window.toggleFullScreen = () => {
-            if (!document.fullscreenEnabled) return;
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().then(() => {
-                    document.getElementById('fullscreen-icon').setAttribute('data-lucide', 'minimize');
-                    lucide.createIcons();
-                });
-            } else {
-                document.exitFullscreen().then(() => {
-                    document.getElementById('fullscreen-icon').setAttribute('data-lucide', 'maximize');
-                    lucide.createIcons();
-                });
-            }
-        };
-
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeGiltInventoryModal = () => document.getElementById('gilt-modal').classList.add('hidden');
-
+        // --- 初始化與雲端監聽 ---
         window.onload = () => {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
             lucide.createIcons();
             document.getElementById('date-picker').value = selectedDate;
             document.getElementById('date-picker').onchange = (e) => { selectedDate = e.target.value; render(); };
             document.getElementById('file-input').onchange = handleFileUpload;
             onAuthStateChanged(auth, (user) => {
-                if(user) { listenCloud(); } else { signInAnonymously(auth); }
+                if(user && user.email === ADMIN_EMAIL) { handleAuthSuccess(user); }
             });
         };
 
@@ -515,40 +543,7 @@
             });
         }
 
-        async function handleFileUpload(e) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const data = new Uint8Array(event.target.result);
-                const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                const sheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
-                const sheet = wb.Sheets[sheetName];
-                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                const headerRow = (rows[0] || []).map(v => String(v ?? "").trim()).filter(v => v !== "");
-                
-                if (headerRow.length === 0) { showMessage("❌ 檔案內容為空", "error"); return; }
-                const expectedHeaders = CONFIG.BASIC_HEADERS;
-                const missing = expectedHeaders.filter(h => !headerRow.includes(h));
-                const extra = headerRow.filter(h => !expectedHeaders.includes(h));
-
-                if (missing.length > 0 || extra.length > 0 || headerRow.length !== expectedHeaders.length) {
-                    let errMsg = "❌ 格式有誤：";
-                    if (missing.length > 0) errMsg += `缺少 [${missing.join(', ')}] `;
-                    if (extra.length > 0) errMsg += `多了 [${extra.join(', ')}] `;
-                    showMessage(errMsg, "error"); return;
-                }
-                excelData = XLSX.utils.sheet_to_json(sheet, { defval: "" }).map(r => {
-                    const nr = {};
-                    Object.keys(r).forEach(k => nr[k.trim()] = r[k]);
-                    return nr;
-                });
-                render();
-                window.renderRawTable();
-                showMessage("✅ 格式精確匹配，數據載入成功");
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
+        // --- 核心計算邏輯 (保持 v9.6 標準) ---
         function calculateStatus() {
             const selDate = new Date(selectedDate);
             const pivotDate = new Date(CONFIG.ANCHOR);
@@ -639,7 +634,7 @@
             });
         }
 
-        // --- 看板功能 ---
+        // --- UI 操作邏輯 ---
         window.openGiltInventoryModal = () => {
             const status = calculateStatus();
             const gilts = status.filter(b => b.isActual && b.giltCount > 0);
@@ -654,7 +649,6 @@
             document.getElementById('gilt-modal').classList.remove('hidden');
         };
 
-        // --- 轉舍分流邏輯 ---
         window.onTransferTargetChange = () => {
             const target = document.getElementById('transfer-target').value;
             const splitFields = document.getElementById('split-fields');
@@ -697,13 +691,11 @@
             const meatCount = window.cleanNum(document.getElementById('transfer-meat-count').value);
             const giltCount = window.cleanNum(document.getElementById('transfer-gilt-count').value);
             const normalCount = window.cleanNum(document.getElementById('transfer-count').value);
-
             const updateData = { id: currentBatchForTransfer.id, updatedAt: new Date().toISOString() };
-
             if (target === 'small') {
                 const total = meatCount + giltCount;
                 if (total !== currentBatchForTransfer.headcount) {
-                    return alert(`❌ 守恆驗證失敗：\n分流總數 (${total}) 不等於當前存欄 (${currentBatchForTransfer.headcount})\n\n請確認：肉豬 (${meatCount}) + 新女豬 (${giltCount}) = 總數。`);
+                    return alert(`❌ 守恆驗證失敗：分流總數 (${total}) 與存欄 (${currentBatchForTransfer.headcount}) 不符。`);
                 }
                 updateData['入小豬舍豬量'] = meatCount;
                 updateData['入新女舍種豬量'] = giltCount;
@@ -711,58 +703,46 @@
                 const fieldMap = { 'nursery': '入保育舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
                 updateData[fieldMap[target]] = normalCount;
             }
-
             await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', currentBatchForTransfer.id), updateData, { merge: true });
-            showMessage(`✅ 轉舍與分流紀錄已同步雲端`);
+            showMessage(`✅ 紀錄已同步雲端`);
             document.getElementById('transfer-modal').classList.add('hidden');
         };
 
-        // --- 分析 Modal 與圖表邏輯 ---
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                const sheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
+                const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
+                const headerRow = (rows[0] || []).map(v => String(v ?? "").trim()).filter(v => v !== "");
+                const missing = CONFIG.BASIC_HEADERS.filter(h => !headerRow.includes(h));
+                if (missing.length > 0 || headerRow.length !== CONFIG.BASIC_HEADERS.length) {
+                    showMessage(`❌ 規格不符，缺少 [${missing.join(', ')}]`, "error"); return;
+                }
+                excelData = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" }).map(r => {
+                    const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); return nr;
+                });
+                render(); showMessage("✅ 數據載入成功");
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
         window.openAnalysisModal = (encodedBatch) => {
             const batch = JSON.parse(decodeURIComponent(encodedBatch));
             document.getElementById('analysis-batch-id').innerText = batch.id;
             const totalSr = batch.nurseryBase > 0 ? ((batch.headcount / batch.nurseryBase) * 100).toFixed(1) : '0';
             document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
-            
             const week = parseFloat(batch.weekAge);
-            const resetBoxes = () => {
-                ['nursery', 'small', 'medium'].forEach(s => {
-                    const box = document.getElementById(`box-${s}`);
-                    if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
-                    const status = document.getElementById(`status-${s}`);
-                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black"; }
-                });
-            };
-            resetBoxes();
-
-            const getRateStr = (next, cur, swMin, swMax) => {
-                if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
-                if (week >= swMin && week < swMax) return { rate: ((batch.headcount / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
-                return { rate: ((next / (cur || 1)) * 100).toFixed(1) + '%', status: '已結算', cur: false };
-            };
-
-            const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
-            const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
-            const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
-
-            const upBox = (id, data, color) => {
-                const box = document.getElementById(`box-${id}`); const status = document.getElementById(`status-${id}`); const rate = document.getElementById(`rate-${id}`);
-                if (rate) rate.innerText = data.rate;
-                if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
-                else if(data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
-            };
-            upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
             document.getElementById('analysis-modal').classList.remove('hidden');
-
             const birthDate = new Date(batch.farrowingDate); const maxW = Math.max(12, Math.ceil(week) + 2);
             const labels = Array.from({length: maxW}, (_, i) => i + 1); const deaths = Array(maxW).fill(0); const survRate = [];
             Object.keys(batch.history).forEach(d => {
                 const diff = Math.floor((new Date(d) - birthDate) / 86400000);
                 if(diff >= 0) { const w = Math.floor(diff/7); if(w < maxW) deaths[w] += (batch.history[d].pigDeath || 0); }
             });
-            let curS = batch.nurseryBase;
-            deaths.forEach(d => { curS -= d; survRate.push(((curS/(batch.nurseryBase||1))*100).toFixed(1)); });
-
+            let curS = batch.nurseryBase; deaths.forEach(d => { curS -= d; survRate.push(((curS/(batch.nurseryBase||1))*100).toFixed(1)); });
             if(chartInstance) chartInstance.destroy();
             chartInstance = new Chart(document.getElementById('lifecycle-chart').getContext('2d'), {
                 type: 'bar',
@@ -772,7 +752,37 @@
             });
         };
 
-        window.render = render;
+        window.switchView = (m) => {
+            document.getElementById('view-inventory').classList.toggle('hidden', m !== 'inventory');
+            document.getElementById('view-raw').classList.toggle('hidden', m !== 'raw');
+            window.renderRawTable();
+        };
+
+        window.renderRawTable = () => {
+            const table = document.getElementById('raw-table');
+            const status = calculateStatus();
+            const data = status.filter(b => b.isActual).map(b => b.basicRow);
+            if(data.length === 0) return table.innerHTML = "<tr><td class='p-20 text-center text-slate-300 italic font-black'>無資料</td></tr>";
+            table.innerHTML = `<thead class="bg-slate-900 text-white font-black"><tr>${CONFIG.BASIC_HEADERS.map(h => `<th class="p-4 whitespace-nowrap">${h}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100">${data.map(r => `<tr>${CONFIG.BASIC_HEADERS.map(h => `<td class="p-4 whitespace-nowrap">${window.safeStr(r[h])}</td>`).join('')}</tr>`).join('')}</tbody>`;
+        };
+
+        window.exportUniversalBackup = () => {
+            const status = calculateStatus(); const basicData = status.filter(b => b.isActual).map(b => b.basicRow);
+            const logs = []; Object.keys(cloudRecords).forEach(bid => Object.keys(cloudRecords[bid]).forEach(d => logs.push({...cloudRecords[bid][d], batchId: bid})));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(basicData), "基本紀錄");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logs), "修改紀錄");
+            XLSX.writeFile(wb, `永隆牧場備份_${selectedDate}.xlsx`);
+        };
+
+        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
+        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
+        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
+        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
+        window.closeGiltInventoryModal = () => document.getElementById('gilt-modal').classList.add('hidden');
+        window.toggleFullScreen = () => { if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } };
+        function showMessage(m, t='info') { const b = document.getElementById('msg-box'); b.innerText = m; b.className = `fixed top-10 left-1/2 -translate-x-1/2 z-[6000] px-8 py-4 rounded-2xl shadow-2xl font-black animate-fade ${t === 'error' ? 'bg-rose-600' : 'bg-slate-900'} text-white`; b.classList.remove('hidden'); setTimeout(() => b.classList.add('hidden'), 3000); }
+
         function render() {
             const status = calculateStatus();
             const updateUI = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
@@ -781,118 +791,28 @@
             updateUI('stat-gilt', status.reduce((acc, b) => acc + (b.giltCount || 0), 0));
             updateUI('stat-match', status.filter(b => b.isActual).length);
             updateUI('stat-cloud', Object.values(cloudRecords).reduce((acc, b) => acc + Object.keys(b).length, 0));
-
+            
             const sowCont = document.getElementById('sow-container');
-            if (sowCont) {
-                sowCont.innerHTML = status.filter(b => b.type === "母豬").map(b => `
-                    <div class="bg-white p-6 rounded-[32px] border-2 shadow-sm ${b.isActual ? 'border-indigo-200' : 'border-slate-50 opacity-60'} animate-fade font-black">
-                        <div class="flex justify-between items-start mb-4">
-                            <div><p class="text-[9px] text-slate-400 italic font-black">配種: ${b.matingDate}</p><h4 class="font-black text-lg text-slate-800 tracking-tighter">${b.id}</h4></div>
-                            <button onclick="window.openEditModal('${b.id}', 'sow')" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-indigo-600 active:scale-90 transition-all shadow-sm font-black"><i data-lucide="edit-3" class="w-4 h-4 font-black"></i></button>
-                        </div>
-                        <div class="pt-4 border-t-2 border-dashed border-slate-100 text-center font-black">
-                            <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-1 font-black">預計分娩</p>
-                            <p class="text-5xl text-indigo-600 tracking-tighter">${b.estFarrowing} <small class="text-xs">頭</small></p>
-                        </div>
+            sowCont.innerHTML = status.filter(b => b.type === "母豬").map(b => `
+                <div class="bg-white p-6 rounded-[32px] border-2 shadow-sm ${b.isActual ? 'border-indigo-200' : 'border-slate-50 opacity-60'} animate-fade font-black">
+                    <div class="flex justify-between items-start mb-4">
+                        <div><p class="text-[9px] text-slate-400 italic">配種: ${b.matingDate}</p><h4 class="font-black text-lg text-slate-800">${b.id}</h4></div>
+                        <button onclick="window.openEditModal('${b.id}', 'sow')" class="p-2 bg-slate-50 rounded-xl text-indigo-600 active:scale-90 transition-all"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
                     </div>
-                `).join('');
-            }
+                    <div class="pt-4 border-t-2 border-dashed border-slate-100 text-center">
+                        <p class="text-[10px] text-slate-400 uppercase mb-1">預計分娩</p>
+                        <p class="text-5xl text-indigo-600">${b.estFarrowing} <small class="text-xs">頭</small></p>
+                    </div>
+                </div>
+            `).join('');
 
             const pigCont = document.getElementById('pig-table-body');
-            if (pigCont) {
-                pigCont.innerHTML = status.filter(b => b.type === "肉豬").map(b => {
-                    const sr = b.nurseryBase > 0 ? ((b.headcount / b.nurseryBase) * 100).toFixed(1) : "0.0";
-                    return `
-                        <tr class="hover:bg-slate-50 transition-all font-black">
-                            <td class="p-6"><div><p class="font-mono text-slate-900">${b.id}</p><p class="text-[9px] text-slate-400 italic">${b.farrowingDate}</p></div></td>
-                            <td class="p-6"><span class="text-[10px] bg-slate-100 px-2 py-1 rounded-lg mr-2 border border-slate-200">${b.stage}</span><span class="text-slate-600">${b.location}</span></td>
-                            <td class="p-6 text-indigo-600 font-black">${b.weekAge}W</td>
-                            <td class="p-6 text-right text-slate-400">${b.nurseryBase}</td>
-                            <td class="p-6 text-right text-pink-500">-${b.loss.stagePig}</td>
-                            <td class="p-6 text-right text-lg text-slate-900">${b.headcount}</td>
-                            <td class="p-6 text-center">
-                                <span class="px-3 py-1 rounded-xl shadow-sm ${parseFloat(sr) < 90 ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}">${sr}%</span>
-                            </td>
-                            <td class="p-6 text-center">
-                                <div class="flex justify-center gap-1.5">
-                                    <button onclick="window.openEditModal('${b.id}', 'pig')" class="p-2 hover:bg-emerald-50 text-emerald-600 rounded-full border border-transparent active:scale-90 transition-all"><i data-lucide="edit-3" class="w-5 h-5 font-black"></i></button>
-                                    <button onclick='window.openAnalysisModal("${encodeURIComponent(JSON.stringify(b))}")' class="p-2 hover:bg-blue-50 text-blue-600 rounded-full border border-transparent active:scale-90 transition-all"><i data-lucide="line-chart" class="w-5 h-5 font-black"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
+            pigCont.innerHTML = status.filter(b => b.type === "肉豬").map(b => {
+                const sr = b.nurseryBase > 0 ? ((b.headcount / b.nurseryBase) * 100).toFixed(1) : "0.0";
+                return `<tr class="hover:bg-slate-50 font-black"><td class="p-6"><div><p class="font-mono text-slate-900">${b.id}</p><p class="text-[9px] text-slate-400 italic">${b.farrowingDate}</p></div></td><td class="p-6"><span class="text-[10px] bg-slate-100 px-2 py-1 rounded-lg mr-2">${b.stage}</span><span class="text-slate-600">${b.location}</span></td><td class="p-6 text-indigo-600">${b.weekAge}W</td><td class="p-6 text-right text-slate-400">${b.nurseryBase}</td><td class="p-6 text-right text-pink-500">-${b.loss.stagePig}</td><td class="p-6 text-right text-lg text-slate-900">${b.headcount}</td><td class="p-6 text-center"><span class="px-3 py-1 rounded-xl ${parseFloat(sr) < 90 ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}">${sr}%</span></td><td class="p-6 text-center"><div class="flex justify-center gap-1.5"><button onclick="window.openEditModal('${b.id}', 'pig')" class="p-2 text-emerald-600 active:scale-90"><i data-lucide="edit-3" class="w-5 h-5"></i></button><button onclick='window.openAnalysisModal("${encodeURIComponent(JSON.stringify(b))}")' class="p-2 text-blue-600 active:scale-90"><i data-lucide="line-chart" class="w-5 h-5"></i></button></div></td></tr>`;
+            }).join('');
             lucide.createIcons();
         }
-
-        // --- 其餘通用函數掛載 ---
-        window.openSmartMatingModal = () => {
-            const today = new Date(); const diff = today.getTime() - CONFIG.ANCHOR.getTime(); const cycles = Math.ceil(diff / (21 * 86400000));
-            const suggestDate = new Date(CONFIG.ANCHOR.getTime() + cycles * 21 * 86400000); const suggestDiff = Math.round((suggestDate - CONFIG.ANCHOR) / (21 * 86400000));
-            const x = (Math.floor(suggestDiff / 7) % 9 + 9) % 9 + 1; const y = (suggestDiff % 7 + 7) % 7 + 1; const id = `${suggestDate.getFullYear()}-G${x}${y}`;
-            const matingIdInput = document.getElementById('mating-id'); if (matingIdInput) matingIdInput.value = id;
-            const matingDateInput = document.getElementById('mating-date'); if (matingDateInput) matingDateInput.value = suggestDate.toISOString().split('T')[0];
-            const d = new Date(suggestDate); d.setDate(d.getDate() + 115);
-            const suggestBirthEl = document.getElementById('suggest-birth'); if (suggestBirthEl) suggestBirthEl.innerText = d.toISOString().split('T')[0];
-            document.getElementById('mating-modal').classList.remove('hidden');
-        };
-
-        window.submitSmartMating = async () => {
-            const id = document.getElementById('mating-id').value.trim(); const count = window.cleanNum(document.getElementById('mating-count').value);
-            const date = document.getElementById('mating-date').value; const birth = document.getElementById('suggest-birth').innerText;
-            if(!id || count <= 0) return alert("請輸入完整資料");
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', id), { id, '批次': id, '配種日期': date, '分娩日期': birth, '配種數': count, updatedAt: new Date().toISOString() });
-            showMessage("✅ 配種批次已寫入雲端基本紀錄"); document.getElementById('mating-modal').classList.add('hidden');
-        };
-
-        window.exportUniversalBackup = () => {
-            const status = calculateStatus();
-            const basicData = status.filter(b => b.isActual).map(b => b.basicRow);
-            const modificationLogs = [];
-            Object.keys(cloudRecords).forEach(bid => {
-                Object.keys(cloudRecords[bid]).forEach(d => {
-                    modificationLogs.push({ '批次ID': bid, '紀錄日期': d, '流產': cloudRecords[bid][d].abortion || 0, '陰性': cloudRecords[bid][d].negative || 0, '重發情': cloudRecords[bid][d].returnEstrus || 0, '母豬損耗': cloudRecords[bid][d].sowDeath || 0, '肉豬死亡': cloudRecords[bid][d].pigDeath || 0, '更新時間': cloudRecords[bid][d].updatedAt });
-                });
-            });
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(basicData), "基本紀錄");
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modificationLogs), "修改紀錄");
-            XLSX.writeFile(wb, `永隆牧場整合備份_${selectedDate}.xlsx`);
-            showMessage("✅ 雙頁面備份檔案已產生");
-        };
-
-        window.openEditModal = (bid, t) => {
-            editingBatchId = bid; document.getElementById('modal-batch-id').innerText = bid; document.getElementById('modal-date').value = selectedDate;
-            const data = cloudRecords[bid]?.[selectedDate] || {}; const inputs = document.getElementById('modal-inputs'); if(!inputs) return;
-            if(t === 'sow') { inputs.innerHTML = `<div class="grid grid-cols-2 gap-4"><div><label class="text-[10px] text-slate-400 font-black">流產</label><input type="number" id="inp-abortion" value="${data.abortion||0}" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400 font-black">陰性</label><input type="number" id="inp-negative" value="${data.negative||0}" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400 font-black">重發情</label><input type="number" id="inp-return" value="${data.returnEstrus||0}" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400 font-black">母豬死亡/淘汰</label><input type="number" id="inp-sowdeath" value="${data.sowDeath||0}" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div></div>`; }
-            else { inputs.innerHTML = `<div><label class="text-[10px] text-slate-400 font-black">當日肉豬死亡 (頭)</label><input type="number" id="inp-pigdeath" value="${data.pigDeath||0}" class="w-full p-3 bg-slate-50 rounded-2xl text-4xl text-center font-black"></div>`; }
-            document.getElementById('edit-modal').classList.remove('hidden'); lucide.createIcons();
-        };
-
-        window.saveLossRecord = async () => {
-            const dateInput = document.getElementById('modal-date'); const d = dateInput ? dateInput.value : selectedDate;
-            const p = { batchId: editingBatchId, date: d, updatedAt: new Date().toISOString() };
-            const inpAbortion = document.getElementById('inp-abortion');
-            if(inpAbortion) { p.abortion = window.cleanNum(inpAbortion.value); p.negative = window.cleanNum(document.getElementById('inp-negative').value); p.returnEstrus = window.cleanNum(document.getElementById('inp-return').value); p.sowDeath = window.cleanNum(document.getElementById('inp-sowdeath').value); }
-            else { const inpPigDeath = document.getElementById('inp-pigdeath'); p.pigDeath = inpPigDeath ? window.cleanNum(inpPigDeath.value) : 0; }
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${editingBatchId}_${d}`), p);
-            showMessage("✅ 異動同步完成"); document.getElementById('edit-modal').classList.add('hidden');
-        };
-
-        window.clearCloudDatabase = async () => {
-            if(!confirm("⚠️ 警告：這將徹底重置雲端所有異動與基本資料！")) return;
-            const b = writeBatch(db); const s = await Promise.all([getDocs(collection(db,'artifacts',APP_ID,'public','data','dailyRecords')), getDocs(collection(db,'artifacts',APP_ID,'public', 'data','manualBatches'))]);
-            s.forEach(sn => sn.forEach(d => b.delete(d.ref))); await b.commit(); showMessage("✅ 雲端資料庫已清空"); setTimeout(() => window.location.reload(), 1000);
-        };
-
-        function showMessage(m, t='info') {
-            const b = document.getElementById('msg-box'); if(!b) return;
-            b.innerText = m; b.className = `fixed top-10 left-1/2 -translate-x-1/2 z-[6000] px-8 py-4 rounded-2xl shadow-2xl font-black animate-fade ${t === 'error' ? 'bg-rose-600' : 'bg-slate-900'} text-white font-black`;
-            b.classList.remove('hidden'); setTimeout(() => b.classList.add('hidden'), 3000);
-        }
-
-        window.checkPasscode = window.checkPasscode; window.switchView = window.switchView; window.renderRawTable = window.renderRawTable; window.toggleFullScreen = window.toggleFullScreen; window.openAnalysisModal = window.openAnalysisModal; window.closeAnalysisModal = window.closeAnalysisModal; window.openEditModal = window.openEditModal; window.closeEditModal = window.closeEditModal; window.saveLossRecord = window.saveLossRecord; window.openSmartMatingModal = window.openSmartMatingModal; window.closeSmartMatingModal = window.closeSmartMatingModal; window.submitSmartMating = window.submitSmartMating; window.openTransferModal = window.openTransferModal; window.closeTransferModal = window.closeTransferModal; window.selectTransferBatch = window.selectTransferBatch; window.submitTransfer = window.submitTransfer; window.exportUniversalBackup = window.exportUniversalBackup; window.clearCloudDatabase = window.clearCloudDatabase;
     </script>
 </body>
 </html>
