@@ -804,9 +804,45 @@
             updateUI('stat-match', status.filter(b => b.isActual).length);
             updateUI('stat-cloud', Object.values(cloudRecords).reduce((acc, b) => acc + b.length, 0));
 
+            // --- 新增特殊卡片邏輯 ---
+            const specialProblem = manualBatches['SPECIAL_PROBLEM'] || { count: 0, date: '無紀錄' };
+            const specialRegumate = manualBatches['SPECIAL_REGUMATE'] || { count: 0, date: '無紀錄' };
+
+            const specialCardsHTML = `
+                <!-- 綜合特殊管理看板 -->
+                <div class="bg-white p-6 rounded-[32px] border-2 border-slate-200 shadow-sm animate-fade font-black flex flex-col justify-between">
+                    <h4 class="font-black text-lg text-slate-800 tracking-tighter mb-4 border-b border-slate-100 pb-2">特殊管理看板</h4>
+                    
+                    <!-- 問題母豬部分 -->
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <p class="text-[9px] text-rose-400 font-bold uppercase">問題母豬</p>
+                            <p class="text-2xl text-rose-600 font-black">${specialProblem.count} <small class="text-xs text-rose-400">頭</small></p>
+                        </div>
+                        <button onclick="window.openSpecialEdit('SPECIAL_PROBLEM', '問題母豬')" class="p-2 bg-rose-50 rounded-xl hover:bg-rose-100 text-rose-600 active:scale-90 transition-all shadow-sm">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <!-- 律齊媒母豬部分 -->
+                    <div class="flex justify-between items-center pt-2 border-t border-dashed border-slate-100">
+                        <div>
+                            <p class="text-[9px] text-purple-400 font-bold uppercase">律齊媒母豬</p>
+                            <p class="text-2xl text-purple-600 font-black">${specialRegumate.count} <small class="text-xs text-purple-400">頭</small></p>
+                        </div>
+                        <button onclick="window.openSpecialEdit('SPECIAL_REGUMATE', '律齊媒母豬')" class="p-2 bg-purple-50 rounded-xl hover:bg-purple-100 text-purple-600 active:scale-90 transition-all shadow-sm">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    
+                    <p class="text-[8px] text-slate-300 italic mt-2 text-center">最近更新: ${specialProblem.date} / ${specialRegumate.date}</p>
+                </div>
+            `;
+
             const sowCont = document.getElementById('sow-container');
             if (sowCont) {
-                sowCont.innerHTML = status.filter(b => b.type === "母豬").map(b => {
+                // 將特殊卡片插入在一般批次之前
+                sowCont.innerHTML = specialCardsHTML + status.filter(b => b.type === "母豬").map(b => {
                     const farrowDate = new Date(b.farrowingDate);
                     const matingDate = new Date(b.matingDate);
                     let dayLabel = "";
@@ -917,6 +953,7 @@
             document.getElementById('week-display').innerText = `選定日為 ${selectedDate}`;
         }
 
+        // --- Render Daily Events (Restored) ---
         function renderDailyEvents() {
             const list = document.getElementById('daily-events-list');
             const section = document.getElementById('daily-events-section');
@@ -970,6 +1007,62 @@
             }
         };
 
+        // --- New Function: Open Special Edit Modal ---
+        window.openSpecialEdit = (id, title) => {
+            editingBatchId = id;
+            document.getElementById('modal-batch-id').innerText = title; // 用標題取代 Batch ID 顯示
+            // 預設日期為今日，或上次更新日期（如果有紀錄的話需要從 manualBatches 抓取，這裡簡化為今日或 UI 上的選定日）
+            document.getElementById('modal-date').value = selectedDate;
+            
+            const currentData = manualBatches[id] || { count: 0 };
+            const inputs = document.getElementById('modal-inputs');
+            if(!inputs) return;
+            
+            // 替換模態框內容為特殊卡片的輸入欄位
+            inputs.innerHTML = `
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black block mb-2">更新日期</label>
+                    <input type="date" id="special-date" value="${selectedDate}" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black mb-4">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black block mb-2">目前數量 (頭)</label>
+                    <input type="number" id="special-count" value="${currentData.count || 0}" class="w-full p-4 bg-slate-50 rounded-2xl text-4xl text-center font-black">
+                </div>
+            `;
+            
+            // 更改儲存按鈕的行為
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveSpecialRecord;
+            saveBtn.innerText = "更新特殊庫存";
+            
+            document.getElementById('edit-modal').classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        // --- New Function: Save Special Record ---
+        window.saveSpecialRecord = async () => {
+            const date = document.getElementById('special-date').value;
+            const count = window.cleanNum(document.getElementById('special-count').value);
+            
+            if (count < 0) return alert("數量不能為負數");
+
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', editingBatchId);
+            await setDoc(ref, {
+                id: editingBatchId,
+                date: date,
+                count: count,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            window.showMessage(`✅ ${editingBatchId === 'SPECIAL_PROBLEM' ? '問題母豬' : '律齊媒母豬'} 庫存已更新`);
+            document.getElementById('edit-modal').classList.add('hidden');
+            
+            // 恢復按鈕預設行為（雖然每次打開都會重設，但保持良好的清理習慣）
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveLossRecord;
+            saveBtn.innerText = "確認儲存並同步雲端";
+        };
+
         // --- Interaction Modals ---
         window.openEditModal = (bid, t) => {
             editingBatchId = bid;
@@ -977,6 +1070,12 @@
             document.getElementById('modal-date').value = selectedDate;
             const inputs = document.getElementById('modal-inputs');
             if(!inputs) return;
+            
+            // 恢復標準按鈕行為與文字
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveLossRecord;
+            saveBtn.innerText = "確認儲存並同步雲端";
+
             if(t === 'sow') {
                 inputs.innerHTML = `<div class="grid grid-cols-2 gap-4"><div><label class="text-[10px] text-slate-400">流產</label><input type="number" id="inp-abortion" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">陰性</label><input type="number" id="inp-negative" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">重發情</label><input type="number" id="inp-return" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">母豬死亡/淘汰</label><input type="number" id="inp-sowdeath" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div></div>`;
             } else {
