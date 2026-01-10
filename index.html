@@ -177,7 +177,7 @@
         </main>
     </div>
 
-    <!-- Modals (Analysis, Edit, Mating, Transfer) ... 保持原樣 ... -->
+    <!-- Modals (Analysis, Edit, Mating, Transfer) -->
     <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black">
         <div class="bg-white w-full max-w-5xl rounded-[60px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade">
             <div class="p-10 border-b border-slate-50 flex justify-between items-center bg-white">
@@ -408,41 +408,67 @@
             });
         }
 
-        // --- 讀入數據：實施「嚴格檢查」邏輯 ---
+        // --- 修正：讀入數據時同步還原「修改紀錄」 ---
         async function handleFileUpload(e) {
             const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = (event) => {
+            reader.onload = async (event) => {
                 const data = new Uint8Array(event.target.result);
                 const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                const sheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
-                const sheet = wb.Sheets[sheetName];
                 
-                // 1. 抓取第一行作為標題進行比對
-                const headerRow = XLSX.utils.sheet_to_json(sheet, { header: 1 })[0];
-                if (!headerRow) {
-                    showMessage("❌ 檔案內容為空", "error");
-                    return;
-                }
-
-                // 2. 嚴格檢查：比對 17 個欄位名稱是否完全一致
+                // 1. 處理「基本紀錄」
+                const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
+                const basicSheet = wb.Sheets[basicSheetName];
+                const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
+                
+                if (!headerRow) { showMessage("❌ 檔案內容為空", "error"); return; }
                 const isFormatValid = CONFIG.BASIC_HEADERS.every(h => headerRow.includes(h));
-                if (!isFormatValid) {
-                    showMessage("❌ 格式有錯 請確認格式", "error");
-                    console.error("Missing headers. Expected:", CONFIG.BASIC_HEADERS, "Found:", headerRow);
-                    return;
-                }
+                if (!isFormatValid) { showMessage("❌ 格式有錯 請確認格式", "error"); return; }
 
-                // 3. 格式正確，開始解析數據
-                excelData = XLSX.utils.sheet_to_json(sheet, { defval: "" }).map(r => {
+                excelData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
                     const nr = {};
                     Object.keys(r).forEach(k => nr[k.trim()] = r[k]);
                     return nr;
                 });
 
+                // 2. 處理「修改紀錄」還原至雲端
+                if (wb.SheetNames.includes("修改紀錄")) {
+                    const modSheet = wb.Sheets["修改紀錄"];
+                    const modData = XLSX.utils.sheet_to_json(modSheet);
+                    const b = writeBatch(db);
+                    let count = 0;
+                    
+                    modData.forEach(row => {
+                        const bid = row['批次ID'];
+                        const d = window.safeStr(row['紀錄日期']);
+                        if (bid && d) {
+                            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${bid}_${d}`);
+                            b.set(ref, {
+                                batchId: bid,
+                                date: d,
+                                abortion: window.cleanNum(row['流產']),
+                                negative: window.cleanNum(row['陰性']),
+                                returnEstrus: window.cleanNum(row['重發情']),
+                                sowDeath: window.cleanNum(row['母豬損耗']),
+                                pigDeath: window.cleanNum(row['肉豬死亡']),
+                                updatedAt: row['更新時間'] || new Date().toISOString()
+                            }, { merge: true });
+                            count++;
+                        }
+                    });
+                    
+                    if (count > 0) {
+                        try {
+                            await b.commit();
+                        } catch (err) {
+                            console.error("還原異動紀錄失敗", err);
+                        }
+                    }
+                }
+
                 render();
                 window.renderRawTable();
-                showMessage("✅ 格式正確，數據載入成功");
+                showMessage("✅ 數據與修改紀錄已成功還原");
             };
             reader.readAsArrayBuffer(file);
         }
