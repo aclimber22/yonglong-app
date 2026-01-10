@@ -360,8 +360,9 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDocs, writeBatch, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration & Environment Setup ---
+        // 修正：補回正式的 apiKey，確保在 GitHub 環境下也能正常連線
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "", 
+            apiKey: "AIzaSyBd-t01YqCEJorVA3Pguz_z2qfOIKhVJ28", 
             authDomain: "yonglong-farm.firebaseapp.com",
             projectId: "yonglong-farm",
             storageBucket: "yonglong-farm.firebasestorage.app",
@@ -686,7 +687,7 @@
                         stageEntryCount = basicRow['入大豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.M * 86400000;
                     } else if(basicRow['入中豬舍豬量'] > 0) {
                         stage = "中豬期"; location = basicRow['中舍'];
-                        stageEntryCount = basicRow['入中豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.S * 86400000;
+                        stageEntryCount = basicRow['入中豬豬量'] || basicRow['入中豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.S * 86400000;
                     } else if(basicRow['入小豬舍豬量'] > 0 || basicRow['入新女舍種豬量'] > 0) {
                         stage = "小豬期"; location = basicRow['小舍'];
                         stageEntryCount = basicRow['入小豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.N * 86400000;
@@ -913,7 +914,7 @@
             }
             renderDailyEvents(); 
             lucide.createIcons();
-            document.getElementById('week-display').innerText = `選定日為 ${selectedDate} (錨點偏移計算中)`;
+            document.getElementById('week-display').innerText = `選定日為 ${selectedDate}`;
         }
 
         function renderDailyEvents() {
@@ -926,7 +927,6 @@
             Object.keys(cloudRecords).forEach(bid => {
                 cloudRecords[bid].forEach(rec => {
                     if (rec.date === selectedDate) {
-                        // 每筆紀錄包含 docId 以便刪除
                         if (rec.pigDeath) events.push({ id: bid, type: '肉豬死亡', val: rec.pigDeath, color: 'rose', icon: 'skull', docId: rec.docId });
                         if (rec.soldCount) events.push({ id: bid, type: '出豬', val: rec.soldCount, color: 'amber', icon: 'shopping-cart', docId: rec.docId });
                         if (rec.abortion) events.push({ id: bid, type: '流產', val: rec.abortion, color: 'rose', icon: 'alert-triangle', docId: rec.docId });
@@ -965,7 +965,6 @@
             try {
                 await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', docId));
                 window.showMessage("✅ 紀錄已成功刪除");
-                // UI 將透過 onSnapshot 自動更新
             } catch (e) {
                 window.showMessage("❌ 刪除失敗：" + e.message, "error");
             }
