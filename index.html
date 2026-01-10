@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.81</title>
+    <title>永隆智慧管理 v9.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -195,6 +195,21 @@
     </div>
 
     <!-- Modals -->
+    <!-- 確認重置視窗 (新增) -->
+    <div id="confirm-modal" class="fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl text-center animate-fade">
+            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl mx-auto flex items-center justify-center mb-6">
+                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-xl font-black mb-4 text-slate-900">確定要清空雲端資料嗎？</h3>
+            <p class="text-slate-500 text-sm mb-8 leading-relaxed">此動作將永久刪除所有雲端異動紀錄與手動建立的批次，且無法還原。</p>
+            <div class="flex gap-3">
+                <button onclick="window.closeConfirmModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
+                <button id="confirm-delete-btn" class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-rose-600/20 transition-all">確定重置</button>
+            </div>
+        </div>
+    </div>
+
     <div id="sale-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
             <div class="bg-amber-600 p-10 text-white flex justify-between items-center font-black">
@@ -239,7 +254,6 @@
         </div>
     </div>
 
-    <!-- 其餘 Modal 保持原樣 -->
     <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black">
         <div class="bg-white w-full max-w-5xl rounded-[60px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade font-black">
             <div class="p-10 border-b border-slate-50 flex justify-between items-center bg-white font-black">
@@ -463,6 +477,35 @@
         window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
         window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
 
+        // --- 修復：重製雲端資料功能 ---
+        window.openConfirmModal = () => {
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            lucide.createIcons();
+            document.getElementById('confirm-delete-btn').onclick = async () => {
+                window.closeConfirmModal();
+                window.showMessage("正在清空資料並同步雲端...", "info");
+                try {
+                    const b = writeBatch(db); 
+                    const [snapRecords, snapBatches] = await Promise.all([
+                        getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords')), 
+                        getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'))
+                    ]);
+                    
+                    snapRecords.forEach(d => b.delete(d.ref));
+                    snapBatches.forEach(d => b.delete(d.ref));
+                    
+                    await b.commit(); 
+                    window.showMessage("✅ 雲端資料庫已徹底清空"); 
+                    setTimeout(() => window.location.reload(), 1200);
+                } catch (e) {
+                    window.showMessage("❌ 清空失敗：" + e.message, "error");
+                }
+            };
+        };
+
+        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
+        window.clearCloudDatabase = window.openConfirmModal; // 改為調用自定義視窗
+
         window.openEditModal = (bid, t) => {
             editingBatchId = bid;
             document.getElementById('modal-batch-id').innerText = bid;
@@ -562,13 +605,13 @@
                 });
                 cloudRecords = newRecs;
                 render();
-            });
+            }, (err) => console.error(err));
             onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'), (snap) => {
                 const newBatches = {};
                 snap.forEach(d => { newBatches[d.id] = d.data(); });
                 manualBatches = newBatches;
                 render();
-            });
+            }, (err) => console.error(err));
         }
 
         async function handleFileUpload(e) {
@@ -667,7 +710,7 @@
                     '入新女舍種豬量': window.cleanNum(match['入新女舍種豬量']),
                     '入小豬舍豬量': window.cleanNum(match['入小豬舍豬量']),
                     '中舍': match['中舍'] || '待定',
-                    '入中豬舍豬量': window.cleanNum(match['入中豬舍豬量']),
+                    '入中豬舍豬量': window.cleanNum(match['入中豬豬量']),
                     '大舍': match['大舍'] || '待定',
                     '入大豬舍豬量': window.cleanNum(match['入大豬舍豬量']),
                     '出豬量': window.cleanNum(match['出豬量']), 
@@ -984,7 +1027,7 @@
             lucide.createIcons();
         }
 
-        // --- 全域掛載：智慧轉舍與其他核心功能 ---
+        // --- 全域掛載 ---
         window.openAnalysisModal = window.openAnalysisModal;
         window.openEditModal = window.openEditModal;
         window.saveLossRecord = window.saveLossRecord;
@@ -1000,7 +1043,6 @@
         };
         window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
         
-        // 智慧轉舍功能實作
         window.openTransferModal = () => {
             const status = calculateStatus(); const list = document.getElementById('transfer-batch-list'); if (!list) return;
             const candidates = status.filter(b => b.isActual && (parseFloat(b.weekAge) > 3));
@@ -1021,31 +1063,17 @@
             const targetSelect = document.getElementById('transfer-target');
             let options = "";
             
-            // 基於週齡推薦目標畜舍
             if (age >= 3 && age <= 6) {
-                options = `<optgroup label="✨ 推薦：進入保育階段">
-                    ${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}
-                </optgroup>`;
+                options = `<optgroup label="✨ 推薦：進入保育階段">${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}</optgroup>`;
             } else if (age >= 10 && age <= 13) {
-                options = `<optgroup label="✨ 推薦：進入小豬階段">
-                    ${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}
-                </optgroup>`;
+                options = `<optgroup label="✨ 推薦：進入小豬階段">${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}</optgroup>`;
             } else if (age >= 18 && age <= 21) {
-                options = `<optgroup label="✨ 推薦：進入中豬階段">
-                    ${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}
-                </optgroup>`;
+                options = `<optgroup label="✨ 推薦：進入中豬階段">${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}</optgroup>`;
             } else if (age >= 23) {
-                options = `<optgroup label="✨ 推薦：進入大豬階段">
-                    ${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}
-                </optgroup>`;
+                options = `<optgroup label="✨ 推薦：進入大豬階段">${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}</optgroup>`;
             } else {
-                options = `<option value="">請選擇畜舍</option>
-                    <option value="保一" data-field="nursery">保育舍</option>
-                    <option value="小一" data-field="small">小豬舍</option>
-                    <option value="中一" data-field="medium">中豬舍</option>
-                    <option value="大一" data-field="large">大豬舍</option>`;
+                options = `<option value="">請選擇畜舍</option><option value="保一" data-field="nursery">保育舍</option><option value="小一" data-field="small">小豬舍</option><option value="中一" data-field="medium">中豬舍</option><option value="大一" data-field="large">大豬舍</option>`;
             }
-
             targetSelect.innerHTML = options;
             window.showMessage(`已選取 ${id} (W${age})`); 
         };
@@ -1054,21 +1082,12 @@
             const targetSelect = document.getElementById('transfer-target');
             const selectedOption = targetSelect.options[targetSelect.selectedIndex];
             if(!window.selectedTransferId || !selectedOption || !selectedOption.value) return alert("請先選取批次與目標畜舍");
-
             const houseName = selectedOption.value;
             const stageField = selectedOption.getAttribute('data-field');
             const count = window.cleanNum(document.getElementById('transfer-count').value);
-
             const countFieldMap = { 'nursery': '入保育舍豬量', 'small': '入小豬舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
             const houseFieldMap = { 'nursery': '保舍', 'small': '小舍', 'medium': '中舍', 'large': '大舍' };
-
-            const updateData = { 
-                id: window.selectedTransferId, 
-                [countFieldMap[stageField]]: count, 
-                [houseFieldMap[stageField]]: houseName,
-                updatedAt: new Date().toISOString() 
-            };
-
+            const updateData = { id: window.selectedTransferId, [countFieldMap[stageField]]: count, [houseFieldMap[stageField]]: houseName, updatedAt: new Date().toISOString() };
             await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', window.selectedTransferId), updateData, { merge: true });
             window.showMessage(`✅ 已成功錄入轉舍：${houseName} (${count} 頭)`); 
             document.getElementById('transfer-modal').classList.add('hidden');
@@ -1081,12 +1100,14 @@
             await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', id), { id, '批次': id, '配種日期': date, '分娩日期': birth, '配種數': count, updatedAt: new Date().toISOString() });
             window.showMessage("✅ 配種批次已寫入雲端基本紀錄"); document.getElementById('mating-modal').classList.add('hidden');
         };
+
         window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
         window.openSaleModal = window.openSaleModal;
         window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
         window.selectSaleBatch = window.selectSaleBatch;
         window.submitSale = window.submitSale;
-        window.clearCloudDatabase = window.clearCloudDatabase;
+        window.clearCloudDatabase = window.openConfirmModal;
+        window.closeConfirmModal = window.closeConfirmModal;
         window.exportUniversalBackup = window.exportUniversalBackup;
     </script>
 </body>
