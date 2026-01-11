@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.19 (全雲端旗艦版)</title>
+    <title>永隆智慧管理 v9.9.22 (順序優化版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -25,11 +25,12 @@
     <script>
         const PASSCODE_VAL = "YL2025";
         
-        // 預設的佔位函式
+        // 預設佔位，避免模組載入前報錯
         window.handleFileUpload = function() { alert("⚠️ 系統正在連線中，請稍後再試..."); };
         window.switchView = function() {};
         window.switchPigView = function() {};
-        window.clearCloudDatabase = function() {};
+        window.clearCloudDatabase = function() {}; 
+        window.executeReset = function() {};
         
         function checkPasscode() {
             const val = document.getElementById('passcode-input').value;
@@ -75,7 +76,7 @@
         <div class="bg-slate-800 text-slate-400 px-6 py-2 text-[10px] flex justify-between items-center border-b border-white/5 font-black">
             <div class="flex items-center gap-4 font-black">
                 <span id="cloud-status" class="flex items-center gap-1.5 font-black"><i data-lucide="refresh-cw" class="w-3 h-3 animate-spin"></i> 正在連線至永隆牧場雲端資料庫...</span>
-                <span id="excel-count" class="flex items-center gap-1.5 font-black"><i data-lucide="database" class="w-3 h-3"></i> 基礎資料同步中</span>
+                <span id="excel-count" class="flex items-center gap-1.5 font-black"><i data-lucide="file-warning" class="w-3 h-3"></i> 尚未載入檔案</span>
             </div>
             <div class="flex items-center gap-4 font-black">
                 <button onclick="window.clearCloudDatabase()" class="text-rose-400 hover:text-rose-300 transition-colors uppercase cursor-pointer font-black">[ ⚠️ 重置雲端資料 ]</button>
@@ -88,7 +89,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.19</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.22</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -106,9 +107,7 @@
                         <i id="fullscreen-icon" data-lucide="maximize" class="w-4 h-4 font-black"></i>
                     </button>
                     <div class="h-6 w-[1px] bg-slate-200 mx-1 font-black"></div>
-                    <button onclick="window.openSmartMatingModal()" class="bg-pink-50 text-pink-600 border border-pink-100 px-4 py-2.5 rounded-xl text-xs font-black shadow-sm hover:bg-pink-100 flex items-center gap-2 font-black">
-                        <i data-lucide="plus-circle" class="w-4 h-4 font-black"></i>智慧配種
-                    </button>
+                    <!-- 移除 智慧配種 按鈕 -->
                     <button onclick="window.openTransferModal()" class="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-2.5 rounded-xl text-xs font-black shadow-sm hover:bg-blue-100 flex items-center gap-2 font-black">
                         <i data-lucide="shuffle" class="w-4 h-4 font-black"></i>新增轉舍
                     </button>
@@ -216,14 +215,11 @@
     <!-- 確認重置視窗 -->
     <div id="confirm-modal" class="fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-sm rounded-[40px] p-8 shadow-2xl text-center animate-fade">
-            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl mx-auto flex items-center justify-center mb-6">
-                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
-            </div>
             <h3 class="text-xl font-black mb-4 text-slate-900">確定要清空雲端資料嗎？</h3>
             <p class="text-slate-500 text-sm mb-8 leading-relaxed">此動作將永久刪除所有雲端異動紀錄、手動建立的批次<br><span class="text-rose-600 font-black">以及上傳的基本地基資料</span>，且無法還原。</p>
             <div class="flex gap-3">
                 <button onclick="window.closeConfirmModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
-                <button id="confirm-delete-btn" class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-rose-600/20 transition-all">確定重置</button>
+                <button id="confirm-delete-btn" onclick="window.executeReset()" class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-rose-600/20 transition-all">確定重置</button>
             </div>
         </div>
     </div>
@@ -275,7 +271,6 @@
 
     <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black"></div>
     <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black"></div>
-    <div id="mating-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black"></div>
     <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
             <div class="bg-blue-600 p-10 text-white flex justify-between items-center font-black">
@@ -355,238 +350,7 @@
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
         
-        // --- Explicitly Defined Close Modal Functions on Window ---
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
-        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
-        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
-
-        // --- Auth Init ---
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth Failed:", error);
-                window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
-            }
-        }
-        
-        // --- Core Functions ---
-        function renderDailyEvents() {
-            const list = document.getElementById('daily-events-list');
-            const section = document.getElementById('daily-events-section');
-            if(!list || !section) return;
-            document.getElementById('event-date-display').innerText = selectedDate;
-
-            let events = [];
-            Object.keys(cloudRecords).forEach(bid => {
-                cloudRecords[bid].forEach(rec => {
-                    if (rec.date === selectedDate) {
-                        if (rec.pigDeath) events.push({ id: bid, type: '肉豬死亡', val: rec.pigDeath, color: 'rose', icon: 'skull', docId: rec.docId });
-                        if (rec.soldCount) events.push({ id: bid, type: '出豬', val: rec.soldCount, color: 'amber', icon: 'shopping-cart', docId: rec.docId });
-                        if (rec.abortion) events.push({ id: bid, type: '流產', val: rec.abortion, color: 'rose', icon: 'alert-triangle', docId: rec.docId });
-                        if (rec.negative) events.push({ id: bid, type: '陰性', val: rec.negative, color: 'slate', icon: 'minus-circle', docId: rec.docId });
-                        if (rec.returnEstrus) events.push({ id: bid, type: '重發情', val: rec.returnEstrus, color: 'orange', icon: 'refresh-ccw', docId: rec.docId });
-                        if (rec.sowDeath) events.push({ id: bid, type: '母豬損耗', val: rec.sowDeath, color: 'rose', icon: 'trending-down', docId: rec.docId });
-                    }
-                });
-            });
-
-            if (events.length > 0) {
-                section.classList.remove('hidden');
-                list.innerHTML = events.map(e => `
-                    <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 font-black animate-fade">
-                        <div class="flex items-center gap-4">
-                            <div class="bg-${e.color}-100 text-${e.color}-600 p-2.5 rounded-xl"><i data-lucide="${e.icon}" class="w-5 h-5"></i></div>
-                            <div>
-                                <p class="text-[10px] text-slate-400 font-bold uppercase">${e.id}</p>
-                                <p class="text-sm font-black">${e.type}: ${e.val} 頭/次</p>
-                            </div>
-                        </div>
-                        <button onclick="window.deleteCloudRecord('${e.docId}')" class="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all active:scale-90" title="刪除此紀錄">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                `).join('');
-                lucide.createIcons();
-            } else {
-                section.classList.add('hidden');
-            }
-        }
-
-        window.renderRawTable = function() {
-            const table = document.getElementById('raw-table');
-            const allIds = new Set();
-            excelData.forEach(r => { if(r['批次']) allIds.add(String(r['批次'])); });
-            Object.keys(manualBatches).forEach(id => allIds.add(id));
-            const fullDataset = Array.from(allIds).map(id => {
-                const manual = manualBatches[id];
-                const excel = excelData.find(r => String(r['批次']) === id);
-                const row = {};
-                CONFIG.BASIC_HEADERS.forEach(h => {
-                    if (manual && manual[h] !== undefined) row[h] = manual[h];
-                    else if (excel && excel[h] !== undefined) row[h] = excel[h];
-                    else row[h] = (h === '批次') ? id : "";
-                });
-                return row;
-            });
-            if(fullDataset.length === 0) return table.innerHTML = "<tr><td class='p-20 text-center text-slate-300 italic font-black'>無基本紀錄資料</td></tr>";
-            const search = document.getElementById('raw-search').value.toUpperCase();
-            const filtered = fullDataset.filter(r => Object.values(r).some(v => String(v).toUpperCase().includes(search)));
-            table.innerHTML = `<thead class="bg-slate-900 text-white font-black sticky top-0 uppercase"><tr>${CONFIG.BASIC_HEADERS.map(h => `<th class="p-4 whitespace-nowrap">${h}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100 text-slate-600 font-black">${filtered.map(r => `<tr>${CONFIG.BASIC_HEADERS.map(h => `<td class="p-4 whitespace-nowrap">${window.safeStr(r[h])}</td>`).join('')}</tr>`).join('')}</tbody>`;
-        };
-
-        window.switchView = function(m) {
-            document.getElementById('view-inventory').classList.toggle('hidden', m !== 'inventory');
-            document.getElementById('view-raw').classList.toggle('hidden', m !== 'raw');
-            document.getElementById('tab-inventory').className = m === 'inventory' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
-            document.getElementById('tab-raw').className = m === 'raw' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
-            if (m === 'raw') window.renderRawTable();
-        };
-
-        window.switchPigView = function(mode) {
-            pigViewMode = mode;
-            document.getElementById('pig-view-btn-batch').className = mode === 'batch' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
-            document.getElementById('pig-view-btn-house').className = mode === 'house' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
-            
-            document.getElementById('pig-view-batch').classList.toggle('hidden', mode !== 'batch');
-            document.getElementById('pig-view-house').classList.toggle('hidden', mode !== 'house');
-            
-            render();
-        };
-
-        // Modified handleFileUpload: Uploads to Firestore 'baseRecords'
-        window.handleFileUpload = async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const data = new Uint8Array(event.target.result);
-                const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
-                const basicSheet = wb.Sheets[basicSheetName];
-                const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
-                
-                if (!headerRow || !['批次','配種日期','分娩日期'].every(h => headerRow.includes(h))) {
-                    window.showMessage("❌ 檔案格式錯誤，必須包含：批次、配種日期、分娩日期", "error");
-                    return;
-                }
-
-                // 1. Prepare Base Records
-                const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
-                    const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
-                    // Convert date objects to strings to store in Firestore safely
-                    ['配種日期', '分娩日期'].forEach(k => {
-                        if (nr[k] instanceof Date) nr[k] = nr[k].toISOString();
-                    });
-                    return nr;
-                });
-
-                window.showMessage("☁️ 正在上傳基礎資料至雲端，請稍候...", "info");
-
-                try {
-                    // 2. Clear existing baseRecords (Full Sync approach)
-                    const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
-                    const q = query(baseRef);
-                    const snapshot = await getDocs(q);
-                    const batchDelete = writeBatch(db);
-                    snapshot.docs.forEach((doc) => {
-                        batchDelete.delete(doc.ref);
-                    });
-                    await batchDelete.commit();
-
-                    // 3. Upload new baseRecords in batches (500 limit)
-                    const chunks = [];
-                    for (let i = 0; i < parsedData.length; i += 400) {
-                        chunks.push(parsedData.slice(i, i + 400));
-                    }
-
-                    for (const chunk of chunks) {
-                        const batchWrite = writeBatch(db);
-                        chunk.forEach(row => {
-                            if (row['批次']) {
-                                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords', String(row['批次']));
-                                batchWrite.set(docRef, row);
-                            }
-                        });
-                        await batchWrite.commit();
-                    }
-
-                    // 4. Handle Modification Logs (Optional, usually kept)
-                    if (wb.SheetNames.includes("修改紀錄")) {
-                        const modData = XLSX.utils.sheet_to_json(wb.Sheets["修改紀錄"]);
-                        const bMod = writeBatch(db);
-                        let modCount = 0;
-                        modData.forEach(row => {
-                             const bid = row['批次ID']; const d = window.safeStr(row['紀錄日期']); const ut = row['更新時間'] || new Date().toISOString();
-                             if (bid && d) {
-                                 const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${bid}_${ut.replace(/[^0-9]/g, "")}`);
-                                 bMod.set(ref, { batchId: bid, date: d, abortion: window.cleanNum(row['流產']), negative: window.cleanNum(row['陰性']), returnEstrus: window.cleanNum(row['重發情']), sowDeath: window.cleanNum(row['母豬損耗']), pigDeath: window.cleanNum(row['肉豬死亡']), soldCount: window.cleanNum(row['出豬量']), avgWeight: window.cleanNum(row['平均重']), updatedAt: ut }, { merge: true });
-                                 modCount++;
-                             }
-                        });
-                        if (modCount > 0) await bMod.commit();
-                    }
-
-                    window.showMessage("✅ 雲端同步完成！所有裝置已更新", "info");
-                    
-                    // Clear input
-                    e.target.value = '';
-                } catch (err) {
-                    console.error(err);
-                    window.showMessage("❌ 上傳失敗：" + err.message, "error");
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        };
-
-        window.listenCloud = function() {
-            if (!user) return;
-            
-            // 1. Listen to Daily Records (Mutations)
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'), (snap) => {
-                const newRecs = {};
-                snap.forEach(d => {
-                    const data = d.data(); data.docId = d.id; 
-                    if(!newRecs[data.batchId]) newRecs[data.batchId] = [];
-                    newRecs[data.batchId].push(data);
-                });
-                cloudRecords = newRecs;
-                try { render(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
-            });
-
-            // 2. Listen to Manual Batches
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'), (snap) => {
-                const newBatches = {};
-                snap.forEach(d => { newBatches[d.id] = d.data(); });
-                manualBatches = newBatches;
-                try { render(); } catch(e) { console.error("Render Error in Batch Listener", e); }
-            });
-
-            // 3. Listen to Base Records (Excel Data) - NEW for Full Cloud Mode
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'), (snap) => {
-                excelData = [];
-                snap.forEach(d => {
-                    excelData.push(d.data());
-                });
-                
-                if (excelData.length > 0) {
-                     document.getElementById('excel-count').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-blue-400"></i> 雲端地基：${excelData.length} 批`;
-                     document.getElementById('cloud-status').innerHTML = '<i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> 全系統連線中';
-                }
-                
-                try { render(); } catch(e) { console.error("Render Error in Base Listener", e); }
-                document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
-            });
-        };
-
+        // --- Core Functions: Defined BEFORE usage ---
         function calculateStatus() {
             const selDate = new Date(selectedDate);
             const anchorDate = new Date(CONFIG.ANCHOR);
@@ -690,136 +454,53 @@
             });
         }
 
+        function renderDailyEvents() {
+            const list = document.getElementById('daily-events-list');
+            const section = document.getElementById('daily-events-section');
+            if(!list || !section) return;
+            document.getElementById('event-date-display').innerText = selectedDate;
+
+            let events = [];
+            Object.keys(cloudRecords).forEach(bid => {
+                cloudRecords[bid].forEach(rec => {
+                    if (rec.date === selectedDate) {
+                        if (rec.pigDeath) events.push({ id: bid, type: '肉豬死亡', val: rec.pigDeath, color: 'rose', icon: 'skull', docId: rec.docId });
+                        if (rec.soldCount) events.push({ id: bid, type: '出豬', val: rec.soldCount, color: 'amber', icon: 'shopping-cart', docId: rec.docId });
+                        if (rec.abortion) events.push({ id: bid, type: '流產', val: rec.abortion, color: 'rose', icon: 'alert-triangle', docId: rec.docId });
+                        if (rec.negative) events.push({ id: bid, type: '陰性', val: rec.negative, color: 'slate', icon: 'minus-circle', docId: rec.docId });
+                        if (rec.returnEstrus) events.push({ id: bid, type: '重發情', val: rec.returnEstrus, color: 'orange', icon: 'refresh-ccw', docId: rec.docId });
+                        if (rec.sowDeath) events.push({ id: bid, type: '母豬損耗', val: rec.sowDeath, color: 'rose', icon: 'trending-down', docId: rec.docId });
+                    }
+                });
+            });
+
+            if (events.length > 0) {
+                section.classList.remove('hidden');
+                list.innerHTML = events.map(e => `
+                    <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 font-black animate-fade">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-${e.color}-100 text-${e.color}-600 p-2.5 rounded-xl"><i data-lucide="${e.icon}" class="w-5 h-5"></i></div>
+                            <div>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase">${e.id}</p>
+                                <p class="text-sm font-black">${e.type}: ${e.val} 頭/次</p>
+                            </div>
+                        </div>
+                        <button onclick="window.deleteCloudRecord('${e.docId}')" class="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all active:scale-90" title="刪除此紀錄">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            } else {
+                section.classList.add('hidden');
+            }
+        }
+        
+        // --- Chart Plugins ---
         const phaseBackgroundPlugin = { id: 'phaseBackground', beforeDraw: (chart) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const phases = [ { start: 0, end: 4, color: 'rgba(241, 245, 249, 0.4)' }, { start: 4, end: 11, color: 'rgba(252, 211, 77, 0.15)' }, { start: 11, end: 19, color: 'rgba(110, 231, 183, 0.15)' }, { start: 19, end: 24, color: 'rgba(147, 197, 253, 0.15)' }, { start: 24, end: 100, color: 'rgba(196, 181, 253, 0.15)' } ]; ctx.save(); phases.forEach(p => { const startX = x.getPixelForValue(p.start - 1); const endX = x.getPixelForValue(p.end - 1); if (startX >= left || endX <= right) { ctx.fillStyle = p.color; ctx.fillRect(Math.max(startX, left), top, Math.min(endX, right) - Math.max(startX, left), bottom - top); } }); ctx.restore(); } };
         const currentWeekMarkerPlugin = { id: 'currentWeekMarker', afterDraw: (chart, args, options) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const week = options.week; if (week >= 1 && week <= chart.data.labels.length) { const xPos = x.getPixelForValue(week - 1); ctx.save(); ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.lineWidth = 2; ctx.strokeStyle = '#4338ca'; ctx.stroke(); ctx.fillStyle = '#4338ca'; ctx.font = '900 11px Noto Sans TC'; ctx.fillText(`目前 W${week}`, xPos + 5, top + 20); ctx.restore(); } } };
 
-        window.openAnalysisModal = (encodedBatch) => {
-            const batch = JSON.parse(decodeURIComponent(encodedBatch));
-            window.currentAnalysisBatchId = batch.id; 
-            document.getElementById('analysis-modal').classList.remove('hidden');
-            window.renderAnalysisContent(batch);
-        };
-
-        window.renderAnalysisContent = (batch) => {
-            document.getElementById('analysis-batch-id').innerText = batch.id;
-            const totalAliveForSR = batch.headcount + batch.giltCount + batch.soldCount;
-            const totalSr = batch.nurseryBase > 0 ? ((totalAliveForSR / batch.nurseryBase) * 100).toFixed(1) : '0';
-            document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
-
-            const week = parseFloat(batch.weekAge);
-            const resetBoxes = () => {
-                ['nursery', 'small', 'medium'].forEach(s => {
-                    const box = document.getElementById(`box-${s}`);
-                    if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
-                    const status = document.getElementById(`status-${s}`);
-                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block"; }
-                    const rate = document.getElementById(`rate-${s}`);
-                    if (rate) rate.innerText = "0%";
-                });
-            };
-            resetBoxes();
-
-            const getRateStr = (next, cur, swMin, swMax) => {
-                if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
-                if (week >= swMin && week < swMax) return { rate: ((totalAliveForSR / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
-                return { rate: ((next / (cur || 1)) * 100).toFixed(1) + '%', status: '已結算', cur: false };
-            };
-            const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
-            const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
-            const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
-
-            const upBox = (id, data, color) => {
-                const box = document.getElementById(`box-${id}`); 
-                const status = document.getElementById(`status-${id}`); 
-                const rate = document.getElementById(`rate-${id}`);
-                if (rate) rate.innerText = data.rate;
-                if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
-                else if (data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
-            };
-            upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
-
-            const birthDate = new Date(batch.farrowingDate);
-            const maxW = Math.max(12, Math.ceil(week) + 2);
-            const labels = Array.from({length: maxW}, (_, i) => i + 1);
-            const deaths = Array(maxW).fill(0);
-            const survRate = [];
-            batch.history.forEach(rec => {
-                const diff = Math.floor((new Date(rec.date) - birthDate) / 86400000);
-                if(diff >= 0) { const w = Math.floor(diff/7); if(w < maxW) deaths[w] += (rec.pigDeath || 0); }
-            });
-            let curS = batch.nurseryBase;
-            deaths.forEach(d => { 
-                curS -= d; 
-                const adjustedSurv = (week >= 11) ? (curS + batch.giltCount + batch.soldCount) : curS;
-                survRate.push(((adjustedSurv/(batch.nurseryBase||1))*100).toFixed(1)); 
-            });
-
-            if(chartInstance) chartInstance.destroy();
-            chartInstance = new Chart(document.getElementById('lifecycle-chart').getContext('2d'), {
-                type: 'bar',
-                data: { labels, datasets: [ { label: '存活曲線 (%)', data: survRate, type: 'line', borderColor: '#3b82f6', yAxisID: 'y1', tension: 0.4, borderWidth: 4, pointRadius: 2 }, { label: '週死亡總數 (頭)', data: deaths, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y2', barThickness: 15 } ] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { weight: '900' } } }, currentWeekMarker: { week: Math.round(week) } }, scales: { y1: { min: 0, max: 100, ticks: { font: { weight: '900' } } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { weight: '900' } } }, x: { title: { display: true, text: '生長週齡 (W)', font: { weight: '900' } }, ticks: { font: { weight: '900' } } } } },
-                plugins: [phaseBackgroundPlugin, currentWeekMarkerPlugin]
-            });
-
-            const historyList = document.getElementById('analysis-history-list');
-            if (batch.history && batch.history.length > 0) {
-                const sortedHistoryAsc = [...batch.history].sort((a, b) => new Date(a.date) - new Date(b.date));
-                const typeMap = { 'pigDeath': '肉豬死亡', 'sowDeath': '母豬損耗', 'soldCount': '出豬', 'abortion': '流產', 'negative': '陰性', 'returnEstrus': '重發情' };
-                const bgMap = { 'pigDeath': 'rose', 'sowDeath': 'rose', 'soldCount': 'amber', 'abortion': 'orange', 'negative': 'slate', 'returnEstrus': 'orange' };
-                
-                let runningBalance = (batch.type === '母豬') ? (batch.matingCount || 0) : (batch.nurseryBase || 0);
-                
-                const historyWithBalance = sortedHistoryAsc.map(rec => {
-                    let typeKey = Object.keys(typeMap).find(k => rec[k] > 0);
-                    let val = rec[typeKey] || 0;
-                    let label = typeMap[typeKey] || '未知異動';
-                    let color = bgMap[typeKey] || 'slate';
-                    
-                    let before = runningBalance;
-                    let change = 0;
-                    if (batch.type === '肉豬') {
-                        change = (rec.pigDeath || 0) + (rec.soldCount || 0);
-                    } else {
-                        change = (rec.abortion || 0) + (rec.sowDeath || 0) + (rec.negative || 0) + (rec.returnEstrus || 0);
-                    }
-                    runningBalance -= change;
-                    let after = runningBalance;
-                    
-                    return { ...rec, before, after, val, label, color, typeKey };
-                });
-
-                const displayHistory = historyWithBalance.reverse();
-
-                historyList.innerHTML = `
-                    <h4 class="font-black text-lg text-slate-800 tracking-tighter mb-4 flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> 批次全歷程異動明細</h4>
-                    <div class="space-y-3">
-                        ${displayHistory.map(rec => `
-                            <div class="flex items-center justify-between p-4 bg-${rec.color}-50 rounded-2xl border border-${rec.color}-100 font-black">
-                                <div class="flex items-center gap-4">
-                                    <div class="bg-white p-2 rounded-xl text-${rec.color}-600 font-bold text-xs">${rec.date}</div>
-                                    <div>
-                                        <p class="text-[10px] text-${rec.color}-400 font-bold uppercase">${rec.label}</p>
-                                        <p class="text-lg font-black text-${rec.color}-700">${rec.val} <small class="text-xs">頭</small></p>
-                                    </div>
-                                </div>
-                                <div class="text-right mx-4 border-l border-r border-slate-100 px-4">
-                                    <p class="text-[9px] text-slate-400">變動前: <span class="font-bold text-slate-600">${rec.before}</span></p>
-                                    <p class="text-[9px] text-slate-400">變動後: <span class="font-bold ${rec.after < 0 ? 'text-rose-500' : 'text-slate-900'}">${rec.after}</span></p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="window.openHistoryEdit('${rec.docId}', '${rec.typeKey}', ${rec.val}, '${rec.date}')" class="p-2 bg-white text-indigo-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm active:scale-90" title="修正紀錄"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                                    <button onclick="window.deleteCloudRecord('${rec.docId}')" class="p-2 bg-white text-rose-300 hover:text-rose-600 rounded-xl transition-all shadow-sm active:scale-90" title="刪除紀錄"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                </div>
-                            </div>`).join('')}
-                    </div>
-                `;
-                lucide.createIcons();
-            } else {
-                historyList.innerHTML = `<p class="text-center text-slate-400 text-sm py-10">此批次尚無任何異動紀錄</p>`;
-            }
-        };
-
+        // --- Render Function ---
         function render() {
             try {
                 const status = calculateStatus();
@@ -848,10 +529,7 @@
                         const ageDays = Math.floor((selDateObj - farrowDate) / (1000 * 60 * 60 * 24));
                         return ageDays < WEANING_DAYS; 
                     });
-
-                    // Take first 7
                     const displaySows = sowBatches.slice(0, 7);
-
                     sowCont.innerHTML = specialCardsHTML + displaySows.map(b => {
                         const farrowDate = new Date(b.farrowingDate);
                         const matingDate = new Date(b.matingDate);
@@ -859,45 +537,14 @@
                         const diffFarrow = Math.floor((selDateObj - farrowDate) / 86400000);
                         const diffMating = Math.floor((selDateObj - matingDate) / 86400000);
 
-                        if (diffFarrow < 0) {
-                            dayLabel = `<span class="text-indigo-600">懷孕 ${diffMating} 日</span>`;
-                        } else {
-                            dayLabel = `<span class="text-emerald-600">哺乳 ${diffFarrow} 日</span>`;
-                        }
-                        
-                        if (selDateObj < matingDate) {
-                            const daysBeforeMating = Math.ceil((matingDate - selDateObj) / 86400000);
-                            dayLabel = `<span class="text-purple-600">配種前 ${daysBeforeMating} 日</span>`;
-                        }
+                        if (diffFarrow < 0) { dayLabel = `<span class="text-indigo-600">懷孕 ${diffMating} 日</span>`; } else { dayLabel = `<span class="text-emerald-600">哺乳 ${diffFarrow} 日</span>`; }
+                        if (selDateObj < matingDate) { const daysBeforeMating = Math.ceil((matingDate - selDateObj) / 86400000); dayLabel = `<span class="text-purple-600">配種前 ${daysBeforeMating} 日</span>`; }
 
                         const rateValue = (b.matingCount > 0) ? ((b.estFarrowing / b.matingCount) * 100).toFixed(1) : "0.0";
                         const rateLabelText = (diffFarrow < 0) ? "配種率" : "分娩率";
                         const rateColorClass = (parseFloat(rateValue) < 85) ? "text-rose-500" : "text-slate-900";
 
-                        return `
-                        <div class="bg-white p-6 rounded-[32px] border-2 shadow-sm ${b.isActual ? 'border-indigo-200' : 'border-slate-50 opacity-60'} animate-fade font-black">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <p class="text-[9px] text-slate-400 italic">配種: ${b.matingDate}</p>
-                                    <p class="text-[9px] text-slate-400 italic">分娩: ${b.farrowingDate}</p>
-                                    <h4 class="font-black text-lg text-slate-800 tracking-tighter">${b.id}</h4>
-                                </div>
-                                <button onclick="window.openEditModal('${b.id}', 'sow')" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-indigo-600 active:scale-90 transition-all shadow-sm font-black"><i data-lucide="edit-3" class="w-4 h-4 font-black"></i></button>
-                            </div>
-                            <div class="space-y-3 mb-4 border-t border-slate-50 pt-4">
-                                <div class="flex justify-between items-center text-[10px] font-black"><span class="text-slate-400">當前狀態:</span><span class="bg-slate-50 px-2 py-0.5 rounded-lg flex items-center gap-1.5">${dayLabel}<span class="${rateColorClass} border-l border-slate-200 pl-1.5">${rateLabelText} ${rateValue}%</span></span></div>
-                                <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[9px] font-black">
-                                    <div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">配種:</span><span>${b.matingCount}</span></div>
-                                    <div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">流產:</span><span class="${b.loss.abortion > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.abortion}</span></div>
-                                    <div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">陰性:</span><span class="${b.loss.negative > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.negative}</span></div>
-                                    <div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">重發:</span><span class="${b.loss.returnEstrus > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.returnEstrus}</span></div>
-                                </div>
-                            </div>
-                            <div class="pt-4 border-t-2 border-dashed border-slate-100 text-center font-black">
-                                <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-1 font-black">預計分娩</p>
-                                <p class="text-5xl text-indigo-600 tracking-tighter">${b.estFarrowing} <small class="text-xs">頭</small></p>
-                            </div>
-                        </div>`;
+                        return `<div class="bg-white p-6 rounded-[32px] border-2 shadow-sm ${b.isActual ? 'border-indigo-200' : 'border-slate-50 opacity-60'} animate-fade font-black"><div class="flex justify-between items-start mb-4"><div><p class="text-[9px] text-slate-400 italic">配種: ${b.matingDate}</p><p class="text-[9px] text-slate-400 italic">分娩: ${b.farrowingDate}</p><h4 class="font-black text-lg text-slate-800 tracking-tighter">${b.id}</h4></div><button onclick="window.openEditModal('${b.id}', 'sow')" class="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 text-indigo-600 active:scale-90 transition-all shadow-sm font-black"><i data-lucide="edit-3" class="w-4 h-4 font-black"></i></button></div><div class="space-y-3 mb-4 border-t border-slate-50 pt-4"><div class="flex justify-between items-center text-[10px] font-black"><span class="text-slate-400">當前狀態:</span><span class="bg-slate-50 px-2 py-0.5 rounded-lg flex items-center gap-1.5">${dayLabel}<span class="${rateColorClass} border-l border-slate-200 pl-1.5">${rateLabelText} ${rateValue}%</span></span></div><div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[9px] font-black"><div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">配種:</span><span>${b.matingCount}</span></div><div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">流產:</span><span class="${b.loss.abortion > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.abortion}</span></div><div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">陰性:</span><span class="${b.loss.negative > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.negative}</span></div><div class="flex justify-between border-b border-slate-50 pb-0.5"><span class="text-slate-400">重發:</span><span class="${b.loss.returnEstrus > 0 ? 'text-rose-500' : 'text-slate-400'}">${b.loss.returnEstrus}</span></div></div></div><div class="pt-4 border-t-2 border-dashed border-slate-100 text-center font-black"><p class="text-[10px] text-slate-400 uppercase tracking-widest mb-1 font-black">預計分娩</p><p class="text-5xl text-indigo-600 tracking-tighter">${b.estFarrowing} <small class="text-xs">頭</small></p></div></div>`;
                     }).join('');
                 }
 
@@ -965,6 +612,199 @@
         // 全域綁定 render 確保外部按鈕可存取
         window.render = render;
         
+        // --- Explicitly Defined Close Modal Functions on Window ---
+        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
+        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
+        // window.closeSmartMatingModal removed
+        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
+        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
+        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
+        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
+
+        // --- Auth Init ---
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Failed:", error);
+                window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
+            }
+        }
+
+        // --- Window-bound functions ---
+        
+        window.renderRawTable = function() {
+            const table = document.getElementById('raw-table');
+            const allIds = new Set();
+            excelData.forEach(r => { if(r['批次']) allIds.add(String(r['批次'])); });
+            Object.keys(manualBatches).forEach(id => allIds.add(id));
+            const fullDataset = Array.from(allIds).map(id => {
+                const manual = manualBatches[id];
+                const excel = excelData.find(r => String(r['批次']) === id);
+                const row = {};
+                CONFIG.BASIC_HEADERS.forEach(h => {
+                    if (manual && manual[h] !== undefined) row[h] = manual[h];
+                    else if (excel && excel[h] !== undefined) row[h] = excel[h];
+                    else row[h] = (h === '批次') ? id : "";
+                });
+                return row;
+            });
+            if(fullDataset.length === 0) return table.innerHTML = "<tr><td class='p-20 text-center text-slate-300 italic font-black'>無基本紀錄資料</td></tr>";
+            const search = document.getElementById('raw-search').value.toUpperCase();
+            const filtered = fullDataset.filter(r => Object.values(r).some(v => String(v).toUpperCase().includes(search)));
+            table.innerHTML = `<thead class="bg-slate-900 text-white font-black sticky top-0 uppercase"><tr>${CONFIG.BASIC_HEADERS.map(h => `<th class="p-4 whitespace-nowrap">${h}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100 text-slate-600 font-black">${filtered.map(r => `<tr>${CONFIG.BASIC_HEADERS.map(h => `<td class="p-4 whitespace-nowrap">${window.safeStr(r[h])}</td>`).join('')}</tr>`).join('')}</tbody>`;
+        };
+
+        window.switchView = function(m) {
+            document.getElementById('view-inventory').classList.toggle('hidden', m !== 'inventory');
+            document.getElementById('view-raw').classList.toggle('hidden', m !== 'raw');
+            document.getElementById('tab-inventory').className = m === 'inventory' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
+            document.getElementById('tab-raw').className = m === 'raw' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
+            if (m === 'raw') window.renderRawTable();
+        };
+
+        window.switchPigView = function(mode) {
+            pigViewMode = mode;
+            document.getElementById('pig-view-btn-batch').className = mode === 'batch' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
+            document.getElementById('pig-view-btn-house').className = mode === 'house' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
+            
+            document.getElementById('pig-view-batch').classList.toggle('hidden', mode !== 'batch');
+            document.getElementById('pig-view-house').classList.toggle('hidden', mode !== 'house');
+            
+            render();
+        };
+
+        window.handleFileUpload = async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const data = new Uint8Array(event.target.result);
+                const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
+                const basicSheet = wb.Sheets[basicSheetName];
+                const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
+                
+                if (!headerRow || !['批次','配種日期','分娩日期'].every(h => headerRow.includes(h))) {
+                    window.showMessage("❌ 檔案格式錯誤，必須包含：批次、配種日期、分娩日期", "error");
+                    return;
+                }
+
+                const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
+                    const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
+                    ['配種日期', '分娩日期'].forEach(k => {
+                        if (nr[k] instanceof Date) nr[k] = nr[k].toISOString();
+                    });
+                    return nr;
+                });
+
+                window.showMessage("☁️ 正在上傳基礎資料至雲端，請稍候...", "info");
+
+                try {
+                    const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
+                    const q = query(baseRef);
+                    const snapshot = await getDocs(q);
+                    
+                    const deleteChunks = [];
+                    let currentDeleteChunk = [];
+                    
+                    snapshot.docs.forEach((doc, index) => {
+                        currentDeleteChunk.push(doc.ref);
+                        if (currentDeleteChunk.length === 400 || index === snapshot.docs.length - 1) {
+                            deleteChunks.push([...currentDeleteChunk]);
+                            currentDeleteChunk = [];
+                        }
+                    });
+
+                    for (const chunk of deleteChunks) {
+                         const batchDelete = writeBatch(db);
+                         chunk.forEach(ref => batchDelete.delete(ref));
+                         await batchDelete.commit();
+                    }
+
+                    const chunks = [];
+                    for (let i = 0; i < parsedData.length; i += 400) {
+                        chunks.push(parsedData.slice(i, i + 400));
+                    }
+
+                    for (const chunk of chunks) {
+                        const batchWrite = writeBatch(db);
+                        chunk.forEach(row => {
+                            if (row['批次']) {
+                                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords', String(row['批次']));
+                                batchWrite.set(docRef, row);
+                            }
+                        });
+                        await batchWrite.commit();
+                    }
+
+                    if (wb.SheetNames.includes("修改紀錄")) {
+                        const modData = XLSX.utils.sheet_to_json(wb.Sheets["修改紀錄"]);
+                        const bMod = writeBatch(db);
+                        let modCount = 0;
+                        modData.forEach(row => {
+                             const bid = row['批次ID']; const d = window.safeStr(row['紀錄日期']); const ut = row['更新時間'] || new Date().toISOString();
+                             if (bid && d) {
+                                 const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${bid}_${ut.replace(/[^0-9]/g, "")}`);
+                                 bMod.set(ref, { batchId: bid, date: d, abortion: window.cleanNum(row['流產']), negative: window.cleanNum(row['陰性']), returnEstrus: window.cleanNum(row['重發情']), sowDeath: window.cleanNum(row['母豬損耗']), pigDeath: window.cleanNum(row['肉豬死亡']), soldCount: window.cleanNum(row['出豬量']), avgWeight: window.cleanNum(row['平均重']), updatedAt: ut }, { merge: true });
+                                 modCount++;
+                             }
+                        });
+                        if (modCount > 0) await bMod.commit();
+                    }
+
+                    window.showMessage("✅ 雲端同步完成！所有裝置已更新", "info");
+                    
+                    e.target.value = '';
+                } catch (err) {
+                    console.error(err);
+                    window.showMessage("❌ 上傳失敗：" + err.message, "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        window.listenCloud = function() {
+            if (!user) return;
+            
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'), (snap) => {
+                const newRecs = {};
+                snap.forEach(d => {
+                    const data = d.data(); data.docId = d.id; 
+                    if(!newRecs[data.batchId]) newRecs[data.batchId] = [];
+                    newRecs[data.batchId].push(data);
+                });
+                cloudRecords = newRecs;
+                try { render(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
+            });
+
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'), (snap) => {
+                const newBatches = {};
+                snap.forEach(d => { newBatches[d.id] = d.data(); });
+                manualBatches = newBatches;
+                try { render(); } catch(e) { console.error("Render Error in Batch Listener", e); }
+            });
+
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'), (snap) => {
+                excelData = [];
+                snap.forEach(d => {
+                    excelData.push(d.data());
+                });
+                
+                if (excelData.length > 0) {
+                     document.getElementById('excel-count').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-blue-400"></i> 雲端地基：${excelData.length} 批`;
+                     document.getElementById('cloud-status').innerHTML = '<i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> 全系統連線中';
+                }
+                
+                try { render(); } catch(e) { console.error("Render Error in Base Listener", e); }
+                document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
+            });
+        };
+
         // **關鍵修正：將函式定義移到這裡，確保在 window.onload 之前已經準備好**
         window.deleteCloudRecord = async (docId) => {
             if (!confirm('⚠️ 確定要刪除這筆異動紀錄嗎？刪除後將重新計算存欄與效率。')) return;
@@ -1111,21 +951,9 @@
             window.selectedTransferId = id; 
             const countInput = document.getElementById('transfer-count'); 
             if (countInput) countInput.value = count; 
-
             const targetSelect = document.getElementById('transfer-target');
             let options = "";
-            
-            if (age >= 3 && age <= 6) {
-                options = `<optgroup label="✨ 推薦：進入保育階段">${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}</optgroup>`;
-            } else if (age >= 10 && age <= 13) {
-                options = `<optgroup label="✨ 推薦：進入小豬階段">${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}</optgroup>`;
-            } else if (age >= 18 && age <= 21) {
-                options = `<optgroup label="✨ 推薦：進入中豬階段">${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}</optgroup>`;
-            } else if (age >= 23) {
-                options = `<optgroup label="✨ 推薦：進入大豬階段">${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}</optgroup>`;
-            } else {
-                options = `<option value="">請選擇畜舍</option><option value="保一" data-field="nursery">保育舍</option><option value="小一" data-field="small">小豬舍</option><option value="中一" data-field="medium">中豬舍</option><option value="大一" data-field="large">大豬舍</option>`;
-            }
+            if (age >= 3 && age <= 6) { options = `<optgroup label="✨ 推薦：進入保育階段">${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}</optgroup>`; } else if (age >= 10 && age <= 13) { options = `<optgroup label="✨ 推薦：進入小豬階段">${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}</optgroup>`; } else if (age >= 18 && age <= 21) { options = `<optgroup label="✨ 推薦：進入中豬階段">${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}</optgroup>`; } else if (age >= 23) { options = `<optgroup label="✨ 推薦：進入大豬階段">${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}</optgroup>`; } else { options = `<option value="">請選擇畜舍</option><option value="保一" data-field="nursery">保育舍</option><option value="小一" data-field="small">小豬舍</option><option value="中一" data-field="medium">中豬舍</option><option value="大一" data-field="large">大豬舍</option>`; }
             targetSelect.innerHTML = options;
             window.showMessage(`已選取 ${id} (W${age})`); 
         };
@@ -1139,18 +967,8 @@
             const count = window.cleanNum(document.getElementById('transfer-count').value);
             const countFieldMap = { 'nursery': '入保育舍豬量', 'small': '入小豬舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
             const houseFieldMap = { 'nursery': '保舍', 'small': '小舍', 'medium': '中舍', 'large': '大舍' };
-            
-            // New logic: Also save the selected date as the transfer date for that stage
             const dateFieldMap = { 'nursery': 'transDate_nursery', 'small': 'transDate_small', 'medium': 'transDate_medium', 'large': 'transDate_large' };
-            
-            const updateData = { 
-                id: window.selectedTransferId, 
-                [countFieldMap[stageField]]: count, 
-                [houseFieldMap[stageField]]: houseName, 
-                [dateFieldMap[stageField]]: selectedDate, // Store the actual transfer date
-                updatedAt: new Date().toISOString() 
-            };
-            
+            const updateData = { id: window.selectedTransferId, [countFieldMap[stageField]]: count, [houseFieldMap[stageField]]: houseName, [dateFieldMap[stageField]]: selectedDate, updatedAt: new Date().toISOString() };
             await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', window.selectedTransferId), updateData, { merge: true });
             window.showMessage(`✅ 已成功錄入轉舍：${houseName} (${count} 頭)`); 
             document.getElementById('transfer-modal').classList.add('hidden');
@@ -1181,7 +999,7 @@
                         '陰性': rec.negative || 0, 
                         '重發情': rec.returnEstrus || 0, 
                         '母豬損耗': rec.sowDeath || 0, 
-                        '肉豬死亡': rec.pigDeath || 0,
+                        '肉豬死亡': rec.pigDeath || 0, 
                         '出豬量': rec.soldCount || 0,
                         '平均重': rec.avgWeight || 0,
                         '更新時間': rec.updatedAt 
@@ -1195,49 +1013,39 @@
             window.showMessage("✅ 全局雙頁面交易備份已產生");
         };
 
-        // --- New: History Edit Logic ---
-        window.openHistoryEdit = (docId, type, val, date) => {
-            editingHistoryDocId = docId;
-            editingHistoryType = type;
-            const container = document.getElementById('history-edit-inputs');
-            
-            const labelMap = { 'pigDeath': '肉豬死亡數', 'sowDeath': '母豬損耗數', 'soldCount': '出豬頭數', 'abortion': '流產數', 'negative': '陰性數', 'returnEstrus': '重發情數' };
-            
-            container.innerHTML = `
-                <div>
-                    <label class="text-[10px] text-indigo-400 font-black block mb-2">發生日期</label>
-                    <input type="date" id="hist-edit-date" value="${date}" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black mb-4 outline-none focus:ring-2 ring-indigo-500/20">
-                </div>
-                <div>
-                    <label class="text-[10px] text-indigo-400 font-black block mb-2">${labelMap[type] || '數量'}</label>
-                    <input type="number" id="hist-edit-val" value="${val}" class="w-full p-4 bg-slate-50 rounded-2xl text-4xl text-center font-black outline-none focus:ring-2 ring-indigo-500/20">
-                </div>
-            `;
-            
-            document.getElementById('history-save-btn').onclick = window.submitHistoryEdit;
-            document.getElementById('history-edit-modal').classList.remove('hidden');
-        };
-
-        window.submitHistoryEdit = async () => {
-            if (!editingHistoryDocId || !editingHistoryType) return;
-            const newDate = document.getElementById('hist-edit-date').value;
-            const newVal = window.cleanNum(document.getElementById('hist-edit-val').value);
-            
-            if (newVal < 0) return alert("數值不能為負數");
-            
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', editingHistoryDocId);
-            const updatePayload = {
-                date: newDate,
-                [editingHistoryType]: newVal,
-                updatedAt: new Date().toISOString()
-            };
-            
-            await setDoc(ref, updatePayload, { merge: true });
-            
-            window.showMessage("✅ 歷史紀錄已修正，數據已重新計算");
-            document.getElementById('history-edit-modal').classList.add('hidden');
-            if (!document.getElementById('analysis-modal').classList.contains('hidden')) {
-                 window.refreshAnalysisModal();
+        window.executeReset = async function() {
+            if (!confirm('⚠️ 此操作將永久刪除所有雲端資料，包含基礎資料、異動紀錄與手動批次。確定執行嗎？')) return;
+            try {
+                window.showMessage("⏳ 正在執行深度重置...", "info");
+                const batch = writeBatch(db);
+                
+                // Clear dailyRecords
+                const drSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'));
+                drSnap.forEach(d => batch.delete(d.ref));
+                
+                // Clear manualBatches
+                const mbSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'));
+                mbSnap.forEach(d => batch.delete(d.ref));
+                
+                // Clear baseRecords
+                const brSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'));
+                brSnap.forEach(d => batch.delete(d.ref));
+                
+                await batch.commit();
+                
+                // Clear local arrays
+                excelData = [];
+                manualBatches = {};
+                cloudRecords = {};
+                
+                window.closeConfirmModal();
+                render();
+                window.renderRawTable();
+                document.getElementById('excel-count').innerHTML = `<i data-lucide="file-warning" class="w-3 h-3"></i> 尚未載入檔案`;
+                window.showMessage("✅ 系統已完全重置，請重新載入資料", "info");
+            } catch (e) {
+                console.error("Reset failed:", e);
+                window.showMessage("❌ 重置失敗：" + e.message, "error");
             }
         };
 
@@ -1250,6 +1058,11 @@
         window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
         window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
         window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
+
+        // New function to open confirm modal
+        window.clearCloudDatabase = function() {
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        };
 
         window.onload = () => {
             document.getElementById('file-input').addEventListener('change', window.handleFileUpload);
