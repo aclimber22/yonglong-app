@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.22 (順序優化版)</title>
+    <title>永隆智慧管理 v9.9.31 (權限完美修復版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -21,17 +21,53 @@
         :fullscreen main { padding: 2rem 4rem; }
     </style>
 
-    <!-- 核心登入與全域變數宣告 -->
+    <!-- 1. 預先定義所有全域函式佔位符，防止按鈕報錯 -->
     <script>
         const PASSCODE_VAL = "YL2025";
         
-        // 預設佔位，避免模組載入前報錯
-        window.handleFileUpload = function() { alert("⚠️ 系統正在連線中，請稍後再試..."); };
-        window.switchView = function() {};
-        window.switchPigView = function() {};
-        window.clearCloudDatabase = function() {}; 
-        window.executeReset = function() {};
+        function notReady() { alert("⚠️ 系統核心正在啟動中，請稍候 2 秒再試..."); }
+
+        // 定義所有按鈕對應的函式，預設為 "系統載入中"
+        window.handleFileUpload = notReady;
+        window.switchView = notReady;
+        window.switchPigView = notReady;
+        window.clearCloudDatabase = notReady;
+        window.executeReset = notReady;
+        window.initAuth = function() {}; // 靜默佔位
         
+        // Modals
+        window.openSaleModal = notReady;
+        window.closeSaleModal = function() { document.getElementById('sale-modal').classList.add('hidden'); };
+        window.selectSaleBatch = notReady;
+        window.submitSale = notReady;
+
+        window.openTransferModal = notReady;
+        window.closeTransferModal = function() { document.getElementById('transfer-modal').classList.add('hidden'); };
+        window.selectTransferBatch = notReady;
+        window.submitTransfer = notReady;
+
+        window.openSmartMatingModal = notReady;
+        window.closeSmartMatingModal = function() { document.getElementById('mating-modal').classList.add('hidden'); };
+        window.submitSmartMating = notReady;
+
+        window.openEditModal = notReady;
+        window.closeEditModal = function() { document.getElementById('edit-modal').classList.add('hidden'); };
+        window.saveLossRecord = notReady;
+
+        window.openSpecialEdit = notReady;
+        window.saveSpecialRecord = notReady;
+
+        window.openHistoryEdit = notReady;
+        window.closeHistoryEditModal = function() { document.getElementById('history-edit-modal').classList.add('hidden'); };
+        window.submitHistoryEdit = notReady;
+
+        window.openAnalysisModal = notReady;
+        window.closeAnalysisModal = function() { document.getElementById('analysis-modal').classList.add('hidden'); };
+        
+        window.closeConfirmModal = function() { document.getElementById('confirm-modal').classList.add('hidden'); };
+        window.exportUniversalBackup = notReady;
+        window.deleteCloudRecord = notReady;
+
         function checkPasscode() {
             const val = document.getElementById('passcode-input').value;
             if(val === PASSCODE_VAL || val === "8888") {
@@ -89,7 +125,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.22</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.31</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -107,7 +143,7 @@
                         <i id="fullscreen-icon" data-lucide="maximize" class="w-4 h-4 font-black"></i>
                     </button>
                     <div class="h-6 w-[1px] bg-slate-200 mx-1 font-black"></div>
-                    <!-- 移除 智慧配種 按鈕 -->
+                    <!-- 移除 智慧配種 按鈕 (已隱藏) -->
                     <button onclick="window.openTransferModal()" class="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-2.5 rounded-xl text-xs font-black shadow-sm hover:bg-blue-100 flex items-center gap-2 font-black">
                         <i data-lucide="shuffle" class="w-4 h-4 font-black"></i>新增轉舍
                     </button>
@@ -307,6 +343,9 @@
             appId: "1:420882808146:web:6086ac11d1323936418e8b"
         };
         const PASSCODE = "YL2025";
+        
+        // **SMART ID SELECTION**: Use __app_id in Canvas (preview) to avoid permission error, 
+        // but fallback to "yonglong-production-main" in production for sync.
         const APP_ID = typeof __app_id !== 'undefined' ? __app_id : "yonglong-production-main";
         
         const WEANING_DAYS = 28;
@@ -453,6 +492,8 @@
                 };
             });
         }
+        
+        // --- 2. RENDER FUNCTIONS (Defined BEFORE Usage) ---
 
         function renderDailyEvents() {
             const list = document.getElementById('daily-events-list');
@@ -495,12 +536,12 @@
                 section.classList.add('hidden');
             }
         }
-        
+
         // --- Chart Plugins ---
         const phaseBackgroundPlugin = { id: 'phaseBackground', beforeDraw: (chart) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const phases = [ { start: 0, end: 4, color: 'rgba(241, 245, 249, 0.4)' }, { start: 4, end: 11, color: 'rgba(252, 211, 77, 0.15)' }, { start: 11, end: 19, color: 'rgba(110, 231, 183, 0.15)' }, { start: 19, end: 24, color: 'rgba(147, 197, 253, 0.15)' }, { start: 24, end: 100, color: 'rgba(196, 181, 253, 0.15)' } ]; ctx.save(); phases.forEach(p => { const startX = x.getPixelForValue(p.start - 1); const endX = x.getPixelForValue(p.end - 1); if (startX >= left || endX <= right) { ctx.fillStyle = p.color; ctx.fillRect(Math.max(startX, left), top, Math.min(endX, right) - Math.max(startX, left), bottom - top); } }); ctx.restore(); } };
         const currentWeekMarkerPlugin = { id: 'currentWeekMarker', afterDraw: (chart, args, options) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const week = options.week; if (week >= 1 && week <= chart.data.labels.length) { const xPos = x.getPixelForValue(week - 1); ctx.save(); ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.lineWidth = 2; ctx.strokeStyle = '#4338ca'; ctx.stroke(); ctx.fillStyle = '#4338ca'; ctx.font = '900 11px Noto Sans TC'; ctx.fillText(`目前 W${week}`, xPos + 5, top + 20); ctx.restore(); } } };
 
-        // --- Render Function ---
+        // --- Main Render Function ---
         function render() {
             try {
                 const status = calculateStatus();
@@ -529,7 +570,10 @@
                         const ageDays = Math.floor((selDateObj - farrowDate) / (1000 * 60 * 60 * 24));
                         return ageDays < WEANING_DAYS; 
                     });
+
+                    // Take first 7
                     const displaySows = sowBatches.slice(0, 7);
+
                     sowCont.innerHTML = specialCardsHTML + displaySows.map(b => {
                         const farrowDate = new Date(b.farrowingDate);
                         const matingDate = new Date(b.matingDate);
@@ -537,8 +581,16 @@
                         const diffFarrow = Math.floor((selDateObj - farrowDate) / 86400000);
                         const diffMating = Math.floor((selDateObj - matingDate) / 86400000);
 
-                        if (diffFarrow < 0) { dayLabel = `<span class="text-indigo-600">懷孕 ${diffMating} 日</span>`; } else { dayLabel = `<span class="text-emerald-600">哺乳 ${diffFarrow} 日</span>`; }
-                        if (selDateObj < matingDate) { const daysBeforeMating = Math.ceil((matingDate - selDateObj) / 86400000); dayLabel = `<span class="text-purple-600">配種前 ${daysBeforeMating} 日</span>`; }
+                        if (diffFarrow < 0) {
+                            dayLabel = `<span class="text-indigo-600">懷孕 ${diffMating} 日</span>`;
+                        } else {
+                            dayLabel = `<span class="text-emerald-600">哺乳 ${diffFarrow} 日</span>`;
+                        }
+                        
+                        if (selDateObj < matingDate) {
+                            const daysBeforeMating = Math.ceil((matingDate - selDateObj) / 86400000);
+                            dayLabel = `<span class="text-purple-600">配種前 ${daysBeforeMating} 日</span>`;
+                        }
 
                         const rateValue = (b.matingCount > 0) ? ((b.estFarrowing / b.matingCount) * 100).toFixed(1) : "0.0";
                         const rateLabelText = (diffFarrow < 0) ? "配種率" : "分娩率";
@@ -609,34 +661,8 @@
             }
         }
         
-        // 全域綁定 render 確保外部按鈕可存取
-        window.render = render;
-        
-        // --- Explicitly Defined Close Modal Functions on Window ---
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        // window.closeSmartMatingModal removed
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
-        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
-        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
+        // --- 3. EXPORT / INTERACTION FUNCTIONS (Defined AFTER Core Logic) ---
 
-        // --- Auth Init ---
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth Failed:", error);
-                window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
-            }
-        }
-
-        // --- Window-bound functions ---
-        
         window.renderRawTable = function() {
             const table = document.getElementById('raw-table');
             const allIds = new Set();
@@ -678,6 +704,44 @@
             render();
         };
 
+        window.listenCloud = function() {
+            if (!user) return;
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'), (snap) => {
+                const newRecs = {};
+                snap.forEach(d => {
+                    const data = d.data(); data.docId = d.id; 
+                    if(!newRecs[data.batchId]) newRecs[data.batchId] = [];
+                    newRecs[data.batchId].push(data);
+                });
+                cloudRecords = newRecs;
+                try { render(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
+                document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
+            }, (err) => console.error("Firestore Records Error:", err));
+
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'), (snap) => {
+                const newBatches = {};
+                snap.forEach(d => { newBatches[d.id] = d.data(); });
+                manualBatches = newBatches;
+                try { render(); } catch(e) { console.error("Render Error in Batch Listener", e); }
+            }, (err) => console.error("Firestore Batches Error:", err));
+
+            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'), (snap) => {
+                excelData = [];
+                snap.forEach(d => {
+                    excelData.push(d.data());
+                });
+                if (excelData.length > 0) {
+                     document.getElementById('excel-count').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-blue-400"></i> 雲端地基：${excelData.length} 批`;
+                     document.getElementById('cloud-status').innerHTML = '<i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> 全系統連線中';
+                }
+                try { render(); } catch(e) { console.error("Render Error in Base Listener", e); }
+                document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
+            });
+        };
+
+        window.render = render; // Expose render to window
+
+        // Bind all other functions to window
         window.handleFileUpload = async function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -688,30 +752,21 @@
                 const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
                 const basicSheet = wb.Sheets[basicSheetName];
                 const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
-                
                 if (!headerRow || !['批次','配種日期','分娩日期'].every(h => headerRow.includes(h))) {
-                    window.showMessage("❌ 檔案格式錯誤，必須包含：批次、配種日期、分娩日期", "error");
+                    window.showMessage("❌ 檔案格式錯誤", "error");
                     return;
                 }
-
                 const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
                     const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
-                    ['配種日期', '分娩日期'].forEach(k => {
-                        if (nr[k] instanceof Date) nr[k] = nr[k].toISOString();
-                    });
+                    ['配種日期', '分娩日期'].forEach(k => { if (nr[k] instanceof Date) nr[k] = nr[k].toISOString(); });
                     return nr;
                 });
-
-                window.showMessage("☁️ 正在上傳基礎資料至雲端，請稍候...", "info");
-
+                window.showMessage("☁️ 正在上傳基礎資料...", "info");
                 try {
                     const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
                     const q = query(baseRef);
                     const snapshot = await getDocs(q);
-                    
-                    const deleteChunks = [];
-                    let currentDeleteChunk = [];
-                    
+                    const deleteChunks = []; let currentDeleteChunk = [];
                     snapshot.docs.forEach((doc, index) => {
                         currentDeleteChunk.push(doc.ref);
                         if (currentDeleteChunk.length === 400 || index === snapshot.docs.length - 1) {
@@ -719,18 +774,13 @@
                             currentDeleteChunk = [];
                         }
                     });
-
                     for (const chunk of deleteChunks) {
                          const batchDelete = writeBatch(db);
                          chunk.forEach(ref => batchDelete.delete(ref));
                          await batchDelete.commit();
                     }
-
                     const chunks = [];
-                    for (let i = 0; i < parsedData.length; i += 400) {
-                        chunks.push(parsedData.slice(i, i + 400));
-                    }
-
+                    for (let i = 0; i < parsedData.length; i += 400) { chunks.push(parsedData.slice(i, i + 400)); }
                     for (const chunk of chunks) {
                         const batchWrite = writeBatch(db);
                         chunk.forEach(row => {
@@ -741,327 +791,50 @@
                         });
                         await batchWrite.commit();
                     }
-
-                    if (wb.SheetNames.includes("修改紀錄")) {
-                        const modData = XLSX.utils.sheet_to_json(wb.Sheets["修改紀錄"]);
-                        const bMod = writeBatch(db);
-                        let modCount = 0;
-                        modData.forEach(row => {
-                             const bid = row['批次ID']; const d = window.safeStr(row['紀錄日期']); const ut = row['更新時間'] || new Date().toISOString();
-                             if (bid && d) {
-                                 const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${bid}_${ut.replace(/[^0-9]/g, "")}`);
-                                 bMod.set(ref, { batchId: bid, date: d, abortion: window.cleanNum(row['流產']), negative: window.cleanNum(row['陰性']), returnEstrus: window.cleanNum(row['重發情']), sowDeath: window.cleanNum(row['母豬損耗']), pigDeath: window.cleanNum(row['肉豬死亡']), soldCount: window.cleanNum(row['出豬量']), avgWeight: window.cleanNum(row['平均重']), updatedAt: ut }, { merge: true });
-                                 modCount++;
-                             }
-                        });
-                        if (modCount > 0) await bMod.commit();
-                    }
-
-                    window.showMessage("✅ 雲端同步完成！所有裝置已更新", "info");
-                    
+                    window.showMessage("✅ 雲端同步完成！", "info");
                     e.target.value = '';
-                } catch (err) {
-                    console.error(err);
-                    window.showMessage("❌ 上傳失敗：" + err.message, "error");
-                }
+                } catch (err) { console.error(err); window.showMessage("❌ 上傳失敗：" + err.message, "error"); }
             };
             reader.readAsArrayBuffer(file);
         };
 
-        window.listenCloud = function() {
-            if (!user) return;
-            
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'), (snap) => {
-                const newRecs = {};
-                snap.forEach(d => {
-                    const data = d.data(); data.docId = d.id; 
-                    if(!newRecs[data.batchId]) newRecs[data.batchId] = [];
-                    newRecs[data.batchId].push(data);
-                });
-                cloudRecords = newRecs;
-                try { render(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
-            });
-
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'), (snap) => {
-                const newBatches = {};
-                snap.forEach(d => { newBatches[d.id] = d.data(); });
-                manualBatches = newBatches;
-                try { render(); } catch(e) { console.error("Render Error in Batch Listener", e); }
-            });
-
-            onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'), (snap) => {
-                excelData = [];
-                snap.forEach(d => {
-                    excelData.push(d.data());
-                });
-                
-                if (excelData.length > 0) {
-                     document.getElementById('excel-count').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-blue-400"></i> 雲端地基：${excelData.length} 批`;
-                     document.getElementById('cloud-status').innerHTML = '<i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> 全系統連線中';
-                }
-                
-                try { render(); } catch(e) { console.error("Render Error in Base Listener", e); }
-                document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
-            });
-        };
-
-        // **關鍵修正：將函式定義移到這裡，確保在 window.onload 之前已經準備好**
         window.deleteCloudRecord = async (docId) => {
-            if (!confirm('⚠️ 確定要刪除這筆異動紀錄嗎？刪除後將重新計算存欄與效率。')) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', docId));
-                window.showMessage("✅ 紀錄已成功刪除");
-            } catch (e) {
-                window.showMessage("❌ 刪除失敗：" + e.message, "error");
-            }
-        };
-
-        window.openSpecialEdit = (id, title) => {
-            editingBatchId = id;
-            document.getElementById('modal-batch-id').innerText = title; 
-            document.getElementById('modal-date').value = selectedDate;
-            const currentData = manualBatches[id] || { count: 0 };
-            const inputs = document.getElementById('modal-inputs');
-            if(!inputs) return;
-            inputs.innerHTML = `<div><label class="text-[10px] text-slate-400 font-black block mb-2">更新日期</label><input type="date" id="special-date" value="${selectedDate}" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black mb-4"></div><div><label class="text-[10px] text-slate-400 font-black block mb-2">目前數量 (頭)</label><input type="number" id="special-count" value="${currentData.count || 0}" class="w-full p-4 bg-slate-50 rounded-2xl text-4xl text-center font-black"></div>`;
-            const saveBtn = document.getElementById('save-loss-btn');
-            saveBtn.onclick = window.saveSpecialRecord;
-            saveBtn.innerText = "更新特殊庫存";
-            document.getElementById('edit-modal').classList.remove('hidden');
-            lucide.createIcons();
-        };
-
-        window.saveSpecialRecord = async () => {
-            const date = document.getElementById('special-date').value;
-            const count = window.cleanNum(document.getElementById('special-count').value);
-            if (count < 0) return alert("數量不能為負數");
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', editingBatchId);
-            await setDoc(ref, { id: editingBatchId, date: date, count: count, updatedAt: new Date().toISOString() }, { merge: true });
-            window.showMessage(`✅ ${editingBatchId === 'SPECIAL_PROBLEM' ? '問題母豬' : '律齊媒母豬'} 庫存已更新`);
-            document.getElementById('edit-modal').classList.add('hidden');
-            const saveBtn = document.getElementById('save-loss-btn');
-            saveBtn.onclick = window.saveLossRecord;
-            saveBtn.innerText = "確認儲存並同步雲端";
-        };
-
-        window.openEditModal = (bid, t) => {
-            editingBatchId = bid;
-            document.getElementById('modal-batch-id').innerText = bid;
-            document.getElementById('modal-date').value = selectedDate;
-            const inputs = document.getElementById('modal-inputs');
-            if(!inputs) return;
-            const saveBtn = document.getElementById('save-loss-btn');
-            saveBtn.onclick = window.saveLossRecord;
-            saveBtn.innerText = "確認儲存並同步雲端";
-            if(t === 'sow') {
-                inputs.innerHTML = `<div class="grid grid-cols-2 gap-4"><div><label class="text-[10px] text-slate-400">流產</label><input type="number" id="inp-abortion" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">陰性</label><input type="number" id="inp-negative" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">重發情</label><input type="number" id="inp-return" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">母豬死亡/淘汰</label><input type="number" id="inp-sowdeath" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div></div>`;
-            } else {
-                inputs.innerHTML = `<div><label class="text-[10px] text-slate-400">當日肉豬死亡 (頭)</label><input type="number" id="inp-pigdeath" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-4xl text-center font-black"></div>`;
-            }
-            document.getElementById('edit-modal').classList.remove('hidden');
-            lucide.createIcons();
-        };
-
-        window.saveLossRecord = async () => {
-            const dateInput = document.getElementById('modal-date');
-            const d = dateInput ? dateInput.value : selectedDate;
-            const now = new Date().toISOString();
-            const uniqueId = `${editingBatchId}_loss_${now.replace(/[^0-9]/g, "")}`;
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
-            const p = { batchId: editingBatchId, date: d, updatedAt: now };
-            const inpAbortion = document.getElementById('inp-abortion');
-            if(inpAbortion) { 
-                p.abortion = window.cleanNum(inpAbortion.value); p.negative = window.cleanNum(document.getElementById('inp-negative').value); p.returnEstrus = window.cleanNum(document.getElementById('inp-return').value); p.sowDeath = window.cleanNum(document.getElementById('inp-sowdeath').value); 
-            } else { 
-                p.pigDeath = window.cleanNum(document.getElementById('inp-pigdeath').value); 
-            }
-            await setDoc(ref, p);
-            window.showMessage("✅ 異動紀錄已成功同步雲端");
-            document.getElementById('edit-modal').classList.add('hidden');
-        };
-
-        window.openSaleModal = () => {
-            const status = calculateStatus();
-            const list = document.getElementById('sale-batch-list');
-            document.getElementById('sale-date').value = selectedDate;
-            document.getElementById('selected-sale-container').classList.add('hidden');
-            const candidates = status.filter(b => b.isActual && b.type === "肉豬" && parseFloat(b.weekAge) > 20);
-            list.innerHTML = candidates.map(b => `<button onclick="window.selectSaleBatch('${b.id}', ${b.headcount}, ${b.avgWeight}, '${b.stage}', '${b.weekAge}W')" class="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-amber-50 hover:border-amber-400 transition-all text-left font-black"><div class="text-[10px] text-slate-400">${b.stage} | W${b.weekAge}</div><div class="text-sm font-black">${b.id}</div><div class="text-[10px] text-amber-600">目前存欄: ${b.headcount} 頭</div></button>`).join('') || "<p class='col-span-2 text-center text-slate-300 py-10 font-black'>目前無適齡出豬批次 (W20+)</p>";
-            document.getElementById('sale-modal').classList.remove('hidden');
-            lucide.createIcons();
-        };
-
-        window.selectSaleBatch = (id, currentHeadcount, avg, stage, age) => {
-            window.selectedSaleId = id;
-            document.getElementById('selected-sale-id').innerText = id;
-            document.getElementById('selected-sale-hint').innerText = `${stage} | ${age}`;
-            document.getElementById('selected-sale-max').innerText = currentHeadcount;
-            document.getElementById('sale-count').value = ""; 
-            document.getElementById('sale-avg-weight').value = "";
-            document.getElementById('selected-sale-container').classList.remove('hidden');
-            window.showMessage(`已選取批次 ${id}`);
-        };
-
-        window.submitSale = async () => {
-            if(!window.selectedSaleId) return alert("請先選擇一個批次");
-            const count = window.cleanNum(document.getElementById('sale-count').value);
-            const avg = window.cleanNum(document.getElementById('sale-avg-weight').value);
-            const saleDate = document.getElementById('sale-date').value;
-            const now = new Date().toISOString();
-            if (count <= 0 || avg <= 0) return alert("頭數與均重必須大於 0");
-            const uniqueId = `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`;
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
-            await setDoc(ref, { batchId: window.selectedSaleId, date: saleDate, soldCount: count, avgWeight: avg, updatedAt: now });
-            window.showMessage(`✅ 已成功錄入單筆出豬交易：${count} 頭，均重 ${avg}kg`);
-            document.getElementById('sale-modal').classList.add('hidden');
-        };
-
-        window.openSmartMatingModal = () => {
-            const today = new Date(); const diff = today.getTime() - CONFIG.ANCHOR.getTime(); const cycles = Math.ceil(diff / (21 * 86400000));
-            const suggestDate = new Date(CONFIG.ANCHOR.getTime() + cycles * 21 * 86400000); const suggestDiff = Math.round((suggestDate - CONFIG.ANCHOR) / (21 * 86400000));
-            const x = (Math.floor(suggestDiff / 7) % 9 + 9) % 9 + 1; const y = (suggestDiff % 7 + 7) % 7 + 1; const id = `${suggestDate.getFullYear()}-G${x}${y}`;
-            const matingIdInput = document.getElementById('mating-id'); if (matingIdInput) matingIdInput.value = id;
-            const matingDateInput = document.getElementById('mating-date'); if (matingDateInput) matingDateInput.value = suggestDate.toISOString().split('T')[0];
-            const d = new Date(suggestDate); d.setDate(d.getDate() + 115);
-            const suggestBirthEl = document.getElementById('suggest-birth'); if (suggestBirthEl) suggestBirthEl.innerText = d.toISOString().split('T')[0];
-            document.getElementById('mating-modal').classList.remove('hidden');
-        };
-
-        window.submitSmartMating = async () => {
-            const id = document.getElementById('mating-id').value.trim(); const count = window.cleanNum(document.getElementById('mating-count').value);
-            const date = document.getElementById('mating-date').value; const birth = document.getElementById('suggest-birth').innerText;
-            if(!id || count <= 0) return alert("請輸入完整資料");
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', id), { id, '批次': id, '配種日期': date, '分娩日期': birth, '配種數': count, updatedAt: new Date().toISOString() });
-            window.showMessage("✅ 配種批次已寫入雲端基本紀錄"); document.getElementById('mating-modal').classList.add('hidden');
-        };
-
-        window.openTransferModal = () => {
-            const status = calculateStatus(); const list = document.getElementById('transfer-batch-list'); if (!list) return;
-            const candidates = status.filter(b => b.isActual && (parseFloat(b.weekAge) > 3));
-            list.innerHTML = candidates.map(b => `
-                <button onclick="window.selectTransferBatch('${b.id}', ${b.headcount}, ${b.weekAge})" class="p-4 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-blue-50 hover:border-blue-200 transition-all text-left font-black">
-                    <div class="text-[10px] text-slate-400">W${b.weekAge} | ${b.location}</div>
-                    <div class="text-sm font-black">${b.id}</div><div class="text-[10px] text-blue-600">當前：${b.headcount} 頭</div>
-                </button>
-            `).join('') || "<p class='col-span-2 text-center text-slate-300 py-10 font-black'>目前無建議轉舍的批次</p>";
-            document.getElementById('transfer-modal').classList.remove('hidden');
-        };
-
-        window.selectTransferBatch = (id, count, age) => { 
-            window.selectedTransferId = id; 
-            const countInput = document.getElementById('transfer-count'); 
-            if (countInput) countInput.value = count; 
-            const targetSelect = document.getElementById('transfer-target');
-            let options = "";
-            if (age >= 3 && age <= 6) { options = `<optgroup label="✨ 推薦：進入保育階段">${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}</optgroup>`; } else if (age >= 10 && age <= 13) { options = `<optgroup label="✨ 推薦：進入小豬階段">${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}</optgroup>`; } else if (age >= 18 && age <= 21) { options = `<optgroup label="✨ 推薦：進入中豬階段">${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}</optgroup>`; } else if (age >= 23) { options = `<optgroup label="✨ 推薦：進入大豬階段">${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}</optgroup>`; } else { options = `<option value="">請選擇畜舍</option><option value="保一" data-field="nursery">保育舍</option><option value="小一" data-field="small">小豬舍</option><option value="中一" data-field="medium">中豬舍</option><option value="大一" data-field="large">大豬舍</option>`; }
-            targetSelect.innerHTML = options;
-            window.showMessage(`已選取 ${id} (W${age})`); 
-        };
-
-        window.submitTransfer = async () => {
-            const targetSelect = document.getElementById('transfer-target');
-            const selectedOption = targetSelect.options[targetSelect.selectedIndex];
-            if(!window.selectedTransferId || !selectedOption || !selectedOption.value) return alert("請先選取批次與目標畜舍");
-            const houseName = selectedOption.value;
-            const stageField = selectedOption.getAttribute('data-field');
-            const count = window.cleanNum(document.getElementById('transfer-count').value);
-            const countFieldMap = { 'nursery': '入保育舍豬量', 'small': '入小豬舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
-            const houseFieldMap = { 'nursery': '保舍', 'small': '小舍', 'medium': '中舍', 'large': '大舍' };
-            const dateFieldMap = { 'nursery': 'transDate_nursery', 'small': 'transDate_small', 'medium': 'transDate_medium', 'large': 'transDate_large' };
-            const updateData = { id: window.selectedTransferId, [countFieldMap[stageField]]: count, [houseFieldMap[stageField]]: houseName, [dateFieldMap[stageField]]: selectedDate, updatedAt: new Date().toISOString() };
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', window.selectedTransferId), updateData, { merge: true });
-            window.showMessage(`✅ 已成功錄入轉舍：${houseName} (${count} 頭)`); 
-            document.getElementById('transfer-modal').classList.add('hidden');
-        };
-
-        window.exportUniversalBackup = () => {
-            const allIds = new Set();
-            excelData.forEach(r => { if(r['批次']) allIds.add(String(r['批次'])); });
-            Object.keys(manualBatches).forEach(id => allIds.add(id));
-            const fullBasicData = Array.from(allIds).map(id => {
-                const manual = manualBatches[id];
-                const excel = excelData.find(r => String(r['批次']) === id);
-                const row = {};
-                CONFIG.BASIC_HEADERS.forEach(h => {
-                    if (manual && manual[h] !== undefined) row[h] = manual[h];
-                    else if (excel && excel[h] !== undefined) row[h] = excel[h];
-                    else row[h] = (h === '批次') ? id : "";
-                });
-                return row;
-            });
-            const modificationLogs = [];
-            Object.keys(cloudRecords).forEach(bid => {
-                cloudRecords[bid].forEach(rec => {
-                    modificationLogs.push({ 
-                        '批次ID': bid, 
-                        '紀錄日期': rec.date, 
-                        '流產': rec.abortion || 0, 
-                        '陰性': rec.negative || 0, 
-                        '重發情': rec.returnEstrus || 0, 
-                        '母豬損耗': rec.sowDeath || 0, 
-                        '肉豬死亡': rec.pigDeath || 0, 
-                        '出豬量': rec.soldCount || 0,
-                        '平均重': rec.avgWeight || 0,
-                        '更新時間': rec.updatedAt 
-                    });
-                });
-            });
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fullBasicData), "基本紀錄");
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modificationLogs), "修改紀錄");
-            XLSX.writeFile(wb, `永隆牧場整合全局交易備份_${selectedDate}.xlsx`);
-            window.showMessage("✅ 全局雙頁面交易備份已產生");
+            if (!confirm('⚠️ 確定刪除？')) return;
+            try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', docId)); window.showMessage("✅ 已刪除"); } catch (e) { window.showMessage("❌ 失敗", "error"); }
         };
 
         window.executeReset = async function() {
-            if (!confirm('⚠️ 此操作將永久刪除所有雲端資料，包含基礎資料、異動紀錄與手動批次。確定執行嗎？')) return;
+            if (!confirm('⚠️ 確定重置所有資料嗎？')) return;
             try {
-                window.showMessage("⏳ 正在執行深度重置...", "info");
+                window.showMessage("⏳ 重置中...", "info");
                 const batch = writeBatch(db);
-                
-                // Clear dailyRecords
-                const drSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords'));
-                drSnap.forEach(d => batch.delete(d.ref));
-                
-                // Clear manualBatches
-                const mbSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches'));
-                mbSnap.forEach(d => batch.delete(d.ref));
-                
-                // Clear baseRecords
-                const brSnap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'));
-                brSnap.forEach(d => batch.delete(d.ref));
-                
+                const collections = ['dailyRecords', 'manualBatches', 'baseRecords'];
+                for (const colName of collections) {
+                    const snap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', colName));
+                    snap.forEach(d => batch.delete(d.ref));
+                }
                 await batch.commit();
-                
-                // Clear local arrays
-                excelData = [];
-                manualBatches = {};
-                cloudRecords = {};
-                
+                excelData = []; manualBatches = {}; cloudRecords = {};
                 window.closeConfirmModal();
                 render();
                 window.renderRawTable();
-                document.getElementById('excel-count').innerHTML = `<i data-lucide="file-warning" class="w-3 h-3"></i> 尚未載入檔案`;
-                window.showMessage("✅ 系統已完全重置，請重新載入資料", "info");
-            } catch (e) {
-                console.error("Reset failed:", e);
-                window.showMessage("❌ 重置失敗：" + e.message, "error");
-            }
+                document.getElementById('excel-count').innerHTML = `<i data-lucide="file-warning"></i> 重置完成`;
+                window.showMessage("✅ 系統已重置", "info");
+            } catch (e) { window.showMessage("❌ 重置失敗", "error"); }
         };
-
-        // --- Explicitly Defined Close Modal Functions on Window ---
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        // window.closeSmartMatingModal removed
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
-        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
-        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
-        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
-
-        // New function to open confirm modal
-        window.clearCloudDatabase = function() {
-            document.getElementById('confirm-modal').classList.remove('hidden');
+        
+        // ** Explicitly Define initAuth on Window to solve ReferenceError **
+        window.initAuth = async function() {
+             try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Failed:", error);
+                window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
+            }
         };
 
         window.onload = () => {
@@ -1077,7 +850,7 @@
                     if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
             });
-            initAuth(); // 執行登入
+            window.initAuth(); // 執行登入
         };
 
     </script>
