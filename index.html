@@ -195,6 +195,26 @@
     </div>
 
     <!-- Modals -->
+    <!-- 歷史紀錄編輯視窗 (New) -->
+    <div id="history-edit-modal" class="fixed inset-0 z-[5500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
+            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
+                <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
+                <div>
+                    <h3 class="font-black text-indigo-900">修正歷史紀錄</h3>
+                    <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p>
+                </div>
+            </div>
+            <div id="history-edit-inputs" class="space-y-4 mb-6">
+                <!-- 動態插入欄位 -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="document.getElementById('history-edit-modal').classList.add('hidden')" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
+                <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 確認重置視窗 -->
     <div id="confirm-modal" class="fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-sm rounded-[40px] p-8 shadow-2xl text-center animate-fade">
@@ -291,6 +311,8 @@
                     <h4 class="text-lg font-black mb-8 flex items-center gap-2"><i data-lucide="trending-up" class="text-blue-600"></i> 生長週趨勢分析</h4>
                     <div style="height: 400px; position: relative;"><canvas id="lifecycle-chart"></canvas></div>
                 </div>
+                <!-- 新增：批次歷史紀錄列表 -->
+                <div id="analysis-history-list" class="mt-8 font-black"></div>
             </div>
         </div>
     </div>
@@ -395,6 +417,10 @@
         let selectedDate = new Date().toISOString().split('T')[0];
         let editingBatchId = null;
         let user = null;
+        // New global state for history editing
+        let editingHistoryDocId = null; 
+        let editingHistoryType = null;
+        let currentAnalysisBatchId = null; // Track currently open batch ID for refreshing
 
         // --- Utility Functions ---
         window.showMessage = (m, t='info') => {
@@ -671,7 +697,12 @@
                     '大舍': match['大舍'] || '待定',
                     '入大豬舍豬量': window.cleanNum(match['入大豬舍豬量']),
                     '出豬量': window.cleanNum(match['出豬量']), 
-                    '平均重': window.cleanNum(match['平均重'])
+                    '平均重': window.cleanNum(match['平均重']),
+                    // Fix: Include transfer dates in basicRow for logic check
+                    'transDate_nursery': match['transDate_nursery'],
+                    'transDate_small': match['transDate_small'],
+                    'transDate_medium': match['transDate_medium'],
+                    'transDate_large': match['transDate_large']
                 } : null;
 
                 const matingDateStr = basicRow ? basicRow['配種日期'] : window.safeStr(theoMating);
@@ -682,23 +713,42 @@
                 let stage = "理論預估", location = "待排程", stageEntryCount = 0, nurseryBase = 0, stageStart = birthTime;
                 if(basicRow) {
                     nurseryBase = basicRow['入保育舍豬量'];
-                    if(basicRow['入大豬舍豬量'] > 0) {
-                        stage = parseFloat(weekAge) > 28 ? "出豬緩衝" : "大豬期"; location = basicRow['大舍'];
-                        stageEntryCount = basicRow['入大豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.M * 86400000;
-                    } else if(basicRow['入中豬舍豬量'] > 0) {
-                        stage = "中豬期"; location = basicRow['中舍'];
-                        stageEntryCount = basicRow['入中豬豬量'] || basicRow['入中豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.S * 86400000;
-                    } else if(basicRow['入小豬舍豬量'] > 0 || basicRow['入新女舍種豬量'] > 0) {
-                        stage = "小豬期"; location = basicRow['小舍'];
-                        stageEntryCount = basicRow['入小豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.N * 86400000;
-                    } else if(basicRow['入保育舍豬量'] > 0) {
-                        stage = "保育期"; location = basicRow['保舍'];
-                        stageEntryCount = basicRow['入保育舍豬量']; stageStart = birthTime + CONFIG.STAGES.L * 86400000;
-                    } else {
-                        stage = "哺乳期"; location = "產房";
-                        stageEntryCount = basicRow['活仔數'] || basicRow['離乳數']; stageStart = birthTime;
+                    
+                    const selTime = new Date(selectedDate).getTime();
+                    
+                    const tLarge = basicRow['transDate_large'] ? new Date(basicRow['transDate_large']).getTime() : null;
+                    const tMedium = basicRow['transDate_medium'] ? new Date(basicRow['transDate_medium']).getTime() : null;
+                    const tSmall = basicRow['transDate_small'] ? new Date(basicRow['transDate_small']).getTime() : null;
+                    const tNursery = basicRow['transDate_nursery'] ? new Date(basicRow['transDate_nursery']).getTime() : null;
+                    
+                    let found = false;
+                    
+                    if (tLarge && selTime >= tLarge) {
+                        stage = parseFloat(weekAge) > 28 ? "出豬緩衝" : "大豬期"; location = basicRow['大舍']; stageEntryCount = basicRow['入大豬舍豬量']; stageStart = tLarge; found = true;
+                    } else if (tMedium && selTime >= tMedium) {
+                        stage = "中豬期"; location = basicRow['中舍']; stageEntryCount = basicRow['入中豬舍豬量']; stageStart = tMedium; found = true;
+                    } else if (tSmall && selTime >= tSmall) {
+                        stage = "小豬期"; location = basicRow['小舍']; stageEntryCount = basicRow['入小豬舍豬量']; stageStart = tSmall; found = true;
+                    } else if (tNursery && selTime >= tNursery) {
+                        stage = "保育期"; location = basicRow['保舍']; stageEntryCount = basicRow['入保育舍豬量']; stageStart = tNursery; found = true;
                     }
-                    if(nurseryBase === 0) nurseryBase = stageEntryCount;
+                    
+                    if (!found) {
+                        const days = (selTime - birthTime) / 86400000;
+                        if (days >= CONFIG.STAGES.M && basicRow['入大豬舍豬量'] > 0) {
+                            stage = "大豬期"; location = basicRow['大舍']; stageEntryCount = basicRow['入大豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.M * 86400000;
+                        } else if (days >= CONFIG.STAGES.S && basicRow['入中豬舍豬量'] > 0) {
+                            stage = "中豬期"; location = basicRow['中舍']; stageEntryCount = basicRow['入中豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.S * 86400000;
+                        } else if (days >= CONFIG.STAGES.N && (basicRow['入小豬舍豬量'] > 0 || basicRow['入新女舍種豬量'] > 0)) {
+                            stage = "小豬期"; location = basicRow['小舍']; stageEntryCount = basicRow['入小豬舍豬量']; stageStart = birthTime + CONFIG.STAGES.N * 86400000;
+                        } else if (days >= CONFIG.STAGES.L && basicRow['入保育舍豬量'] > 0) {
+                            stage = "保育期"; location = basicRow['保舍']; stageEntryCount = basicRow['入保育舍豬量']; stageStart = birthTime + CONFIG.STAGES.L * 86400000;
+                        } else {
+                            stage = "哺乳期"; location = "產房";
+                            stageEntryCount = basicRow['活仔數'] || basicRow['離乳數']; stageStart = birthTime;
+                        }
+                    }
+                    nurseryBase = basicRow['入保育舍豬量'] || basicRow['離乳數'] || basicRow['活仔數'] || 0;
                 }
 
                 const history = cloudRecords[basicRow?.['批次'] || fullId] || [];
@@ -710,8 +760,8 @@
                         acc.returnEstrus += (rec.returnEstrus || 0);
                         if(new Date(rec.date).getTime() >= stageStart) {
                             acc.stagePig += (rec.pigDeath || 0);
+                            acc.soldCount += (rec.soldCount || 0);
                         }
-                        acc.soldCount += (rec.soldCount || 0);
                         if (rec.avgWeight > 0) acc.latestAvgWeight = rec.avgWeight;
                     }
                     return acc;
@@ -737,12 +787,25 @@
         const phaseBackgroundPlugin = { id: 'phaseBackground', beforeDraw: (chart) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const phases = [ { start: 0, end: 4, color: 'rgba(241, 245, 249, 0.4)' }, { start: 4, end: 11, color: 'rgba(252, 211, 77, 0.15)' }, { start: 11, end: 19, color: 'rgba(110, 231, 183, 0.15)' }, { start: 19, end: 24, color: 'rgba(147, 197, 253, 0.15)' }, { start: 24, end: 100, color: 'rgba(196, 181, 253, 0.15)' } ]; ctx.save(); phases.forEach(p => { const startX = x.getPixelForValue(p.start - 1); const endX = x.getPixelForValue(p.end - 1); if (startX >= left || endX <= right) { ctx.fillStyle = p.color; ctx.fillRect(Math.max(startX, left), top, Math.min(endX, right) - Math.max(startX, left), bottom - top); } }); ctx.restore(); } };
         const currentWeekMarkerPlugin = { id: 'currentWeekMarker', afterDraw: (chart, args, options) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const week = options.week; if (week >= 1 && week <= chart.data.labels.length) { const xPos = x.getPixelForValue(week - 1); ctx.save(); ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.lineWidth = 2; ctx.strokeStyle = '#4338ca'; ctx.stroke(); ctx.fillStyle = '#4338ca'; ctx.font = '900 11px Noto Sans TC'; ctx.fillText(`目前 W${week}`, xPos + 5, top + 20); ctx.restore(); } } };
 
+        // === Refactored Analysis Modal Logic ===
+        
+        // 1. Open the modal (sets ID and shows container)
         window.openAnalysisModal = (encodedBatch) => {
             const batch = JSON.parse(decodeURIComponent(encodedBatch));
+            window.currentAnalysisBatchId = batch.id; // Track ID for auto-refresh
+            document.getElementById('analysis-modal').classList.remove('hidden');
+            window.renderAnalysisContent(batch);
+        };
+
+        // 2. Render the content (Chart + List)
+        window.renderAnalysisContent = (batch) => {
+            // Update Header info
             document.getElementById('analysis-batch-id').innerText = batch.id;
             const totalAliveForSR = batch.headcount + batch.giltCount + batch.soldCount;
             const totalSr = batch.nurseryBase > 0 ? ((totalAliveForSR / batch.nurseryBase) * 100).toFixed(1) : '0';
             document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
+
+            // Reset Boxes styling
             const week = parseFloat(batch.weekAge);
             const resetBoxes = () => {
                 ['nursery', 'small', 'medium'].forEach(s => {
@@ -750,9 +813,13 @@
                     if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
                     const status = document.getElementById(`status-${s}`);
                     if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block"; }
+                    const rate = document.getElementById(`rate-${s}`);
+                    if (rate) rate.innerText = "0%";
                 });
             };
             resetBoxes();
+
+            // Calculate Stage Rates
             const getRateStr = (next, cur, swMin, swMax) => {
                 if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
                 if (week >= swMin && week < swMax) return { rate: ((totalAliveForSR / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
@@ -761,15 +828,18 @@
             const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
             const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
             const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
+
             const upBox = (id, data, color) => {
-                const box = document.getElementById(`box-${id}`); const status = document.getElementById(`status-${id}`); const rate = document.getElementById(`rate-${id}`);
+                const box = document.getElementById(`box-${id}`); 
+                const status = document.getElementById(`status-${id}`); 
+                const rate = document.getElementById(`rate-${id}`);
                 if (rate) rate.innerText = data.rate;
                 if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
-                else if(data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
+                else if (data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
             };
             upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
-            document.getElementById('analysis-modal').classList.remove('hidden');
 
+            // Draw Chart
             const birthDate = new Date(batch.farrowingDate);
             const maxW = Math.max(12, Math.ceil(week) + 2);
             const labels = Array.from({length: maxW}, (_, i) => i + 1);
@@ -793,6 +863,80 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { weight: '900' } } }, currentWeekMarker: { week: Math.round(week) } }, scales: { y1: { min: 0, max: 100, ticks: { font: { weight: '900' } } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { weight: '900' } } }, x: { title: { display: true, text: '生長週齡 (W)', font: { weight: '900' } }, ticks: { font: { weight: '900' } } } } },
                 plugins: [phaseBackgroundPlugin, currentWeekMarkerPlugin]
             });
+
+            // Render History List
+            const historyList = document.getElementById('analysis-history-list');
+            if (batch.history && batch.history.length > 0) {
+                // Sort oldest -> newest for correct balance calculation
+                const sortedHistoryAsc = [...batch.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+                const typeMap = { 'pigDeath': '肉豬死亡', 'sowDeath': '母豬損耗', 'soldCount': '出豬', 'abortion': '流產', 'negative': '陰性', 'returnEstrus': '重發情' };
+                const bgMap = { 'pigDeath': 'rose', 'sowDeath': 'rose', 'soldCount': 'amber', 'abortion': 'orange', 'negative': 'slate', 'returnEstrus': 'orange' };
+                
+                let runningBalance = (batch.type === '母豬') ? (batch.matingCount || 0) : (batch.nurseryBase || 0);
+                
+                const historyWithBalance = sortedHistoryAsc.map(rec => {
+                    let typeKey = Object.keys(typeMap).find(k => rec[k] > 0);
+                    let val = rec[typeKey] || 0;
+                    let label = typeMap[typeKey] || '未知異動';
+                    let color = bgMap[typeKey] || 'slate';
+                    
+                    let before = runningBalance;
+                    let change = 0;
+                    if (batch.type === '肉豬') {
+                        change = (rec.pigDeath || 0) + (rec.soldCount || 0);
+                    } else {
+                        change = (rec.abortion || 0) + (rec.sowDeath || 0) + (rec.negative || 0) + (rec.returnEstrus || 0);
+                    }
+                    runningBalance -= change;
+                    let after = runningBalance;
+                    
+                    return { ...rec, before, after, val, label, color, typeKey };
+                });
+
+                // Reverse to show newest first
+                const displayHistory = historyWithBalance.reverse();
+
+                historyList.innerHTML = `
+                    <h4 class="font-black text-lg text-slate-800 tracking-tighter mb-4 flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> 批次全歷程異動明細</h4>
+                    <div class="space-y-3">
+                        ${displayHistory.map(rec => `
+                            <div class="flex items-center justify-between p-4 bg-${rec.color}-50 rounded-2xl border border-${rec.color}-100 font-black">
+                                <div class="flex items-center gap-4">
+                                    <div class="bg-white p-2 rounded-xl text-${rec.color}-600 font-bold text-xs">${rec.date}</div>
+                                    <div>
+                                        <p class="text-[10px] text-${rec.color}-400 font-bold uppercase">${rec.label}</p>
+                                        <p class="text-lg font-black text-${rec.color}-700">${rec.val} <small class="text-xs">頭</small></p>
+                                    </div>
+                                </div>
+                                <div class="text-right mx-4 border-l border-r border-slate-100 px-4">
+                                    <p class="text-[9px] text-slate-400">變動前: <span class="font-bold text-slate-600">${rec.before}</span></p>
+                                    <p class="text-[9px] text-slate-400">變動後: <span class="font-bold ${rec.after < 0 ? 'text-rose-500' : 'text-slate-900'}">${rec.after}</span></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="window.openHistoryEdit('${rec.docId}', '${rec.typeKey}', ${rec.val}, '${rec.date}')" class="p-2 bg-white text-indigo-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm active:scale-90" title="修正紀錄"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                    <button onclick="window.deleteCloudRecord('${rec.docId}')" class="p-2 bg-white text-rose-300 hover:text-rose-600 rounded-xl transition-all shadow-sm active:scale-90" title="刪除紀錄"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                `;
+                lucide.createIcons();
+            } else {
+                historyList.innerHTML = `<p class="text-center text-slate-400 text-sm py-10">此批次尚無任何異動紀錄</p>`;
+            }
+        };
+
+        // 3. Auto-Refresh Helper
+        window.refreshAnalysisModal = () => {
+            if (!window.currentAnalysisBatchId) return;
+            const status = calculateStatus();
+            const batch = status.find(b => b.id === window.currentAnalysisBatchId);
+            if (batch) {
+                // If batch still exists, re-render content
+                window.renderAnalysisContent(batch);
+            } else {
+                // If batch was deleted or lost, close modal
+                window.closeAnalysisModal();
+            }
         };
 
         function render() {
@@ -951,9 +1095,13 @@
             renderDailyEvents(); 
             lucide.createIcons();
             document.getElementById('week-display').innerText = `選定日為 ${selectedDate}`;
+            
+            // --- Auto-refresh Modal if Open ---
+            if (!document.getElementById('analysis-modal').classList.contains('hidden')) {
+                window.refreshAnalysisModal();
+            }
         }
 
-        // --- Render Daily Events (Restored) ---
         function renderDailyEvents() {
             const list = document.getElementById('daily-events-list');
             const section = document.getElementById('daily-events-section');
@@ -1218,7 +1366,18 @@
             const count = window.cleanNum(document.getElementById('transfer-count').value);
             const countFieldMap = { 'nursery': '入保育舍豬量', 'small': '入小豬舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
             const houseFieldMap = { 'nursery': '保舍', 'small': '小舍', 'medium': '中舍', 'large': '大舍' };
-            const updateData = { id: window.selectedTransferId, [countFieldMap[stageField]]: count, [houseFieldMap[stageField]]: houseName, updatedAt: new Date().toISOString() };
+            
+            // New logic: Also save the selected date as the transfer date for that stage
+            const dateFieldMap = { 'nursery': 'transDate_nursery', 'small': 'transDate_small', 'medium': 'transDate_medium', 'large': 'transDate_large' };
+            
+            const updateData = { 
+                id: window.selectedTransferId, 
+                [countFieldMap[stageField]]: count, 
+                [houseFieldMap[stageField]]: houseName, 
+                [dateFieldMap[stageField]]: selectedDate, // Store the actual transfer date
+                updatedAt: new Date().toISOString() 
+            };
+            
             await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', window.selectedTransferId), updateData, { merge: true });
             window.showMessage(`✅ 已成功錄入轉舍：${houseName} (${count} 頭)`); 
             document.getElementById('transfer-modal').classList.add('hidden');
