@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.31 (權限完美修復版)</title>
+    <title>永隆智慧管理 v9.9.35 (介面完全體)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -125,7 +125,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.31</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.35</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -233,24 +233,117 @@
     </div>
 
     <!-- Modals -->
-    <!-- 歷史紀錄編輯視窗 -->
-    <div id="history-edit-modal" class="fixed inset-0 z-[5500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
-            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
-                <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
-                <div><h3 class="font-black text-indigo-900">修正歷史紀錄</h3><p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p></div>
+    <!-- Analysis Modal -->
+    <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black">
+        <div class="bg-white w-full max-w-5xl rounded-[60px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade font-black">
+            <div class="p-10 border-b border-slate-50 flex justify-between items-center bg-white font-black">
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-600 p-4 rounded-3xl text-white shadow-lg font-black"><i data-lucide="bar-chart-3"></i></div>
+                    <div>
+                        <div class="flex items-baseline gap-3">
+                            <h3 id="analysis-batch-id" class="text-3xl font-black tracking-tighter font-black">BATCH-ID</h3>
+                            <span id="analysis-total-rate" class="text-sm font-black bg-slate-900 text-white px-3 py-1 rounded-full font-black">全期育成 0%</span>
+                        </div>
+                        <p class="text-slate-400 text-xs font-black uppercase mt-1">Efficiency & Modification Logs</p>
+                    </div>
+                </div>
+                <button onclick="window.closeAnalysisModal()" class="p-4 text-slate-300 hover:text-rose-500 transition-all font-black"><i data-lucide="x" class="w-10 h-10 font-black"></i></button>
             </div>
-            <div id="history-edit-inputs" class="space-y-4 mb-6"></div>
-            <div class="flex gap-3">
-                <button onclick="window.closeHistoryEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
-                <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
+            <div class="p-10 overflow-y-auto no-scrollbar space-y-10 font-black">
+                <div class="grid grid-cols-3 gap-6 font-black">
+                    <div id="box-nursery" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">保育期 (W4-W11)</p>
+                        <p id="rate-nursery" class="text-4xl font-black">0%</p>
+                        <p id="status-nursery" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                    <div id="box-small" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">小豬期 (W11-W19)</p>
+                        <p id="rate-small" class="text-4xl font-black">0%</p>
+                        <p id="status-small" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                    <div id="box-medium" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">中豬期 (W19-W24)</p>
+                        <p id="rate-medium" class="text-4xl font-black">0%</p>
+                        <p id="status-medium" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-[40px] border-2 border-slate-50 p-10 font-black">
+                    <h4 class="text-lg font-black mb-8 flex items-center gap-2"><i data-lucide="trending-up" class="text-blue-600"></i> 生長週趨勢分析</h4>
+                    <div style="height: 400px; position: relative;"><canvas id="lifecycle-chart"></canvas></div>
+                </div>
+                <div id="analysis-history-list" class="mt-8 font-black"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div id="modal-header-color" class="bg-indigo-600 p-8 text-white flex justify-between items-center font-black">
+                <div><h3 id="modal-batch-id" class="text-2xl font-black italic">BATCH ID</h3><p class="text-indigo-200 text-[10px] uppercase font-bold tracking-widest mt-1">Modification Engine</p></div>
+                <button onclick="window.closeEditModal()" class="p-2 hover:bg-white/20 rounded-full transition-all font-black"><i data-lucide="x" class="font-black"></i></button>
+            </div>
+            <div class="p-8 space-y-6 font-black">
+                <div class="bg-orange-50 p-5 rounded-3xl border border-orange-100 font-black">
+                    <label class="text-[10px] text-orange-600 uppercase mb-2 block tracking-widest font-black">異動紀錄日期</label>
+                    <input type="date" id="modal-date" class="w-full bg-white border-2 border-transparent focus:border-orange-400 outline-none p-3 rounded-2xl text-xl font-black transition-all font-black">
+                </div>
+                <div id="modal-inputs" class="space-y-4 font-black"></div>
+                <button id="save-loss-btn" onclick="window.saveLossRecord()" class="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">確認儲存並同步雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mating Modal (Need structure even if hidden) -->
+    <div id="mating-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div class="bg-pink-600 p-10 text-white flex justify-between items-center font-black">
+                <div><h3 class="text-3xl font-black tracking-tighter">智慧配種錄入</h3><p class="text-pink-200 text-xs font-bold uppercase mt-1">Suggested Batch Planning</p></div>
+                <button onclick="window.closeSmartMatingModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
+            </div>
+            <div class="p-10 space-y-8 font-black">
+                <div class="grid grid-cols-2 gap-6 font-black">
+                    <div class="col-span-2"><label class="text-[10px] text-slate-400 uppercase mb-2 block">推薦批次 ID</label><input type="text" id="mating-id" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl text-pink-600 font-black"></div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種日期</label><input type="date" id="mating-date" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-xl font-black"></div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種母豬頭數</label><input type="number" id="mating-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl font-black"></div>
+                    <div class="col-span-2 bg-slate-50 p-6 rounded-3xl border border-slate-100 font-black">
+                        <div class="flex justify-between text-xs font-black text-slate-400"><span>預計分娩日期</span><span id="suggest-birth" class="text-slate-900">尚未計算</span></div>
+                    </div>
+                </div>
+                <button onclick="window.submitSmartMating()" class="w-full py-6 bg-pink-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">建立批次並寫入雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transfer Modal -->
+    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div class="bg-blue-600 p-10 text-white flex justify-between items-center font-black">
+                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
+                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
+            </div>
+            <div class="p-10 space-y-8 font-black">
+                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
+                <div class="grid grid-cols-2 gap-6 font-black">
+                    <div>
+                        <label class="text-[10px] text-slate-400 uppercase mb-2 block">目標畜舍 (基於日齡智慧推薦)</label>
+                        <select id="transfer-target" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
+                            <option value="">請先選取批次</option>
+                        </select>
+                    </div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">實際轉入數量</label><input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl font-black"></div>
+                </div>
+                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">更新基本資料與畜舍</button>
             </div>
         </div>
     </div>
     
-    <!-- 確認重置視窗 -->
+    <!-- Confirm Reset Modal -->
     <div id="confirm-modal" class="fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-sm rounded-[40px] p-8 shadow-2xl text-center animate-fade">
+            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl mx-auto flex items-center justify-center mb-6">
+                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+            </div>
             <h3 class="text-xl font-black mb-4 text-slate-900">確定要清空雲端資料嗎？</h3>
             <p class="text-slate-500 text-sm mb-8 leading-relaxed">此動作將永久刪除所有雲端異動紀錄、手動建立的批次<br><span class="text-rose-600 font-black">以及上傳的基本地基資料</span>，且無法還原。</p>
             <div class="flex gap-3">
@@ -305,26 +398,17 @@
         </div>
     </div>
 
-    <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black"></div>
-    <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black"></div>
-    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
-            <div class="bg-blue-600 p-10 text-white flex justify-between items-center font-black">
-                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
-                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
+    <!-- History Edit Modal -->
+    <div id="history-edit-modal" class="fixed inset-0 z-[5500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
+            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
+                <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
+                <div><h3 class="font-black text-indigo-900">修正歷史紀錄</h3><p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p></div>
             </div>
-            <div class="p-10 space-y-8 font-black">
-                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
-                <div class="grid grid-cols-2 gap-6 font-black">
-                    <div>
-                        <label class="text-[10px] text-slate-400 uppercase mb-2 block">目標畜舍 (基於日齡智慧推薦)</label>
-                        <select id="transfer-target" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
-                            <option value="">請先選取批次</option>
-                        </select>
-                    </div>
-                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">實際轉入數量</label><input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl font-black"></div>
-                </div>
-                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">更新基本資料與畜舍</button>
+            <div id="history-edit-inputs" class="space-y-4 mb-6"></div>
+            <div class="flex gap-3">
+                <button onclick="window.closeHistoryEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
+                <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
             </div>
         </div>
     </div>
@@ -333,6 +417,11 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDocs, writeBatch, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // *** 自動判斷 App ID，解決權限錯誤並支援同步 ***
+        // 在 GitHub/正式環境：使用統一 ID "yonglong-production-main" 進行同步
+        // 在 預覽環境：使用系統分配的 __app_id 進行測試，避免權限錯誤
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : "yonglong-production-main";
 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyBd-t01YqCEJorVA3Pguz_z2qfOIKhVJ28", 
@@ -343,11 +432,6 @@
             appId: "1:420882808146:web:6086ac11d1323936418e8b"
         };
         const PASSCODE = "YL2025";
-        
-        // **SMART ID SELECTION**: Use __app_id in Canvas (preview) to avoid permission error, 
-        // but fallback to "yonglong-production-main" in production for sync.
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : "yonglong-production-main";
-        
         const WEANING_DAYS = 28;
 
         const app = initializeApp(firebaseConfig);
@@ -495,7 +579,7 @@
         
         // --- 2. RENDER FUNCTIONS (Defined BEFORE Usage) ---
 
-        function renderDailyEvents() {
+        function renderDailyEventsFn() {
             const list = document.getElementById('daily-events-list');
             const section = document.getElementById('daily-events-section');
             if(!list || !section) return;
@@ -541,8 +625,127 @@
         const phaseBackgroundPlugin = { id: 'phaseBackground', beforeDraw: (chart) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const phases = [ { start: 0, end: 4, color: 'rgba(241, 245, 249, 0.4)' }, { start: 4, end: 11, color: 'rgba(252, 211, 77, 0.15)' }, { start: 11, end: 19, color: 'rgba(110, 231, 183, 0.15)' }, { start: 19, end: 24, color: 'rgba(147, 197, 253, 0.15)' }, { start: 24, end: 100, color: 'rgba(196, 181, 253, 0.15)' } ]; ctx.save(); phases.forEach(p => { const startX = x.getPixelForValue(p.start - 1); const endX = x.getPixelForValue(p.end - 1); if (startX >= left || endX <= right) { ctx.fillStyle = p.color; ctx.fillRect(Math.max(startX, left), top, Math.min(endX, right) - Math.max(startX, left), bottom - top); } }); ctx.restore(); } };
         const currentWeekMarkerPlugin = { id: 'currentWeekMarker', afterDraw: (chart, args, options) => { const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart; const week = options.week; if (week >= 1 && week <= chart.data.labels.length) { const xPos = x.getPixelForValue(week - 1); ctx.save(); ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.lineWidth = 2; ctx.strokeStyle = '#4338ca'; ctx.stroke(); ctx.fillStyle = '#4338ca'; ctx.font = '900 11px Noto Sans TC'; ctx.fillText(`目前 W${week}`, xPos + 5, top + 20); ctx.restore(); } } };
 
-        // --- Main Render Function ---
-        function render() {
+        const renderAnalysisContentFn = (batch) => {
+            document.getElementById('analysis-batch-id').innerText = batch.id;
+            const totalAliveForSR = batch.headcount + batch.giltCount + batch.soldCount;
+            const totalSr = batch.nurseryBase > 0 ? ((totalAliveForSR / batch.nurseryBase) * 100).toFixed(1) : '0';
+            document.getElementById('analysis-total-rate').innerText = `全期育成 ${totalSr}%`;
+
+            const week = parseFloat(batch.weekAge);
+            const resetBoxes = () => {
+                ['nursery', 'small', 'medium'].forEach(s => {
+                    const box = document.getElementById(`box-${s}`);
+                    if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
+                    const status = document.getElementById(`status-${s}`);
+                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block"; }
+                    const rate = document.getElementById(`rate-${s}`);
+                    if (rate) rate.innerText = "0%";
+                });
+            };
+            resetBoxes();
+
+            const getRateStr = (next, cur, swMin, swMax) => {
+                if (week < swMin) return { rate: '0%', status: '未開始', cur: false };
+                if (week >= swMin && week < swMax) return { rate: ((totalAliveForSR / (cur || 1)) * 100).toFixed(1) + '%', status: '進行中', cur: true };
+                return { rate: ((next / (cur || 1)) * 100).toFixed(1) + '%', status: '已結算', cur: false };
+            };
+            const nD = getRateStr(batch.basicRow['入小豬舍豬量'], batch.nurseryBase, 4, 11);
+            const sD = getRateStr(batch.basicRow['入中豬舍豬量'], batch.basicRow['入小豬舍豬量'], 11, 19);
+            const mD = getRateStr(batch.basicRow['入大豬舍豬量'], batch.basicRow['入中豬舍豬量'], 19, 24);
+
+            const upBox = (id, data, color) => {
+                const box = document.getElementById(`box-${id}`); 
+                const status = document.getElementById(`status-${id}`); 
+                const rate = document.getElementById(`rate-${id}`);
+                if (rate) rate.innerText = data.rate;
+                if (data.cur && box && status) { box.classList.add(`border-${color}-500`, `bg-${color}-50`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-${color}-500 text-white font-black animate-pulse`; status.innerText = "目前階段"; }
+                else if (data.status === '已結算' && box && status) { box.classList.add(`bg-slate-800/5`); status.className = `text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-800 text-white font-black`; status.innerText = "已結算"; }
+            };
+            upBox('nursery', nD, 'amber'); upBox('small', sD, 'emerald'); upBox('medium', mD, 'blue');
+
+            const birthDate = new Date(batch.farrowingDate);
+            const maxW = Math.max(12, Math.ceil(week) + 2);
+            const labels = Array.from({length: maxW}, (_, i) => i + 1);
+            const deaths = Array(maxW).fill(0);
+            const survRate = [];
+            batch.history.forEach(rec => {
+                const diff = Math.floor((new Date(rec.date) - birthDate) / 86400000);
+                if(diff >= 0) { const w = Math.floor(diff/7); if(w < maxW) deaths[w] += (rec.pigDeath || 0); }
+            });
+            let curS = batch.nurseryBase;
+            deaths.forEach(d => { 
+                curS -= d; 
+                const adjustedSurv = (week >= 11) ? (curS + batch.giltCount + batch.soldCount) : curS;
+                survRate.push(((adjustedSurv/(batch.nurseryBase||1))*100).toFixed(1)); 
+            });
+
+            if(chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(document.getElementById('lifecycle-chart').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets: [ { label: '存活曲線 (%)', data: survRate, type: 'line', borderColor: '#3b82f6', yAxisID: 'y1', tension: 0.4, borderWidth: 4, pointRadius: 2 }, { label: '週死亡總數 (頭)', data: deaths, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y2', barThickness: 15 } ] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { weight: '900' } } }, currentWeekMarker: { week: Math.round(week) } }, scales: { y1: { min: 0, max: 100, ticks: { font: { weight: '900' } } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { weight: '900' } } }, x: { title: { display: true, text: '生長週齡 (W)', font: { weight: '900' } }, ticks: { font: { weight: '900' } } } } },
+                plugins: [phaseBackgroundPlugin, currentWeekMarkerPlugin]
+            });
+
+            const historyList = document.getElementById('analysis-history-list');
+            if (batch.history && batch.history.length > 0) {
+                const sortedHistoryAsc = [...batch.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+                const typeMap = { 'pigDeath': '肉豬死亡', 'sowDeath': '母豬損耗', 'soldCount': '出豬', 'abortion': '流產', 'negative': '陰性', 'returnEstrus': '重發情' };
+                const bgMap = { 'pigDeath': 'rose', 'sowDeath': 'rose', 'soldCount': 'amber', 'abortion': 'orange', 'negative': 'slate', 'returnEstrus': 'orange' };
+                
+                let runningBalance = (batch.type === '母豬') ? (batch.matingCount || 0) : (batch.nurseryBase || 0);
+                
+                const historyWithBalance = sortedHistoryAsc.map(rec => {
+                    let typeKey = Object.keys(typeMap).find(k => rec[k] > 0);
+                    let val = rec[typeKey] || 0;
+                    let label = typeMap[typeKey] || '未知異動';
+                    let color = bgMap[typeKey] || 'slate';
+                    
+                    let before = runningBalance;
+                    let change = 0;
+                    if (batch.type === '肉豬') {
+                        change = (rec.pigDeath || 0) + (rec.soldCount || 0);
+                    } else {
+                        change = (rec.abortion || 0) + (rec.sowDeath || 0) + (rec.negative || 0) + (rec.returnEstrus || 0);
+                    }
+                    runningBalance -= change;
+                    let after = runningBalance;
+                    
+                    return { ...rec, before, after, val, label, color, typeKey };
+                });
+
+                const displayHistory = historyWithBalance.reverse();
+
+                historyList.innerHTML = `
+                    <h4 class="font-black text-lg text-slate-800 tracking-tighter mb-4 flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> 批次全歷程異動明細</h4>
+                    <div class="space-y-3">
+                        ${displayHistory.map(rec => `
+                            <div class="flex items-center justify-between p-4 bg-${rec.color}-50 rounded-2xl border border-${rec.color}-100 font-black">
+                                <div class="flex items-center gap-4">
+                                    <div class="bg-white p-2 rounded-xl text-${rec.color}-600 font-bold text-xs">${rec.date}</div>
+                                    <div>
+                                        <p class="text-[10px] text-${rec.color}-400 font-bold uppercase">${rec.label}</p>
+                                        <p class="text-lg font-black text-${rec.color}-700">${rec.val} <small class="text-xs">頭</small></p>
+                                    </div>
+                                </div>
+                                <div class="text-right mx-4 border-l border-r border-slate-100 px-4">
+                                    <p class="text-[9px] text-slate-400">變動前: <span class="font-bold text-slate-600">${rec.before}</span></p>
+                                    <p class="text-[9px] text-slate-400">變動後: <span class="font-bold ${rec.after < 0 ? 'text-rose-500' : 'text-slate-900'}">${rec.after}</span></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="window.openHistoryEdit('${rec.docId}', '${rec.typeKey}', ${rec.val}, '${rec.date}')" class="p-2 bg-white text-indigo-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm active:scale-90" title="修正紀錄"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                    <button onclick="window.deleteCloudRecord('${rec.docId}')" class="p-2 bg-white text-rose-300 hover:text-rose-600 rounded-xl transition-all shadow-sm active:scale-90" title="刪除紀錄"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                `;
+                lucide.createIcons();
+            } else {
+                historyList.innerHTML = `<p class="text-center text-slate-400 text-sm py-10">此批次尚無任何異動紀錄</p>`;
+            }
+        };
+
+        const renderFn = () => {
             try {
                 const status = calculateStatus();
                 const selDateObj = new Date(selectedDate);
@@ -652,18 +855,16 @@
                     }).join('');
                 }
                 
-                renderDailyEvents(); 
+                renderDailyEventsFn(); 
                 lucide.createIcons();
                 document.getElementById('week-display').innerText = `選定日為 ${selectedDate}`;
                 if (!document.getElementById('analysis-modal').classList.contains('hidden')) { window.refreshAnalysisModal(); }
             } catch(e) {
                 console.error("Render error:", e);
             }
-        }
-        
-        // --- 3. EXPORT / INTERACTION FUNCTIONS (Defined AFTER Core Logic) ---
+        };
 
-        window.renderRawTable = function() {
+        const renderRawTableFn = () => {
             const table = document.getElementById('raw-table');
             const allIds = new Set();
             excelData.forEach(r => { if(r['批次']) allIds.add(String(r['批次'])); });
@@ -685,23 +886,42 @@
             table.innerHTML = `<thead class="bg-slate-900 text-white font-black sticky top-0 uppercase"><tr>${CONFIG.BASIC_HEADERS.map(h => `<th class="p-4 whitespace-nowrap">${h}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100 text-slate-600 font-black">${filtered.map(r => `<tr>${CONFIG.BASIC_HEADERS.map(h => `<td class="p-4 whitespace-nowrap">${window.safeStr(r[h])}</td>`).join('')}</tr>`).join('')}</tbody>`;
         };
 
+        // --- 4. EXPORT TO WINDOW (Final Step) ---
+        window.render = renderFn;
+        window.renderRawTable = renderRawTableFn;
+        window.openAnalysisModal = (encodedBatch) => {
+            const batch = JSON.parse(decodeURIComponent(encodedBatch));
+            window.currentAnalysisBatchId = batch.id;
+            document.getElementById('analysis-modal').classList.remove('hidden');
+            renderAnalysisContentFn(batch);
+        };
+        window.renderAnalysisContent = renderAnalysisContentFn;
+        window.refreshAnalysisModal = () => {
+            if (!window.currentAnalysisBatchId) return;
+            const status = calculateStatus();
+            const batch = status.find(b => b.id === window.currentAnalysisBatchId);
+            if (batch) {
+                renderAnalysisContentFn(batch);
+            } else {
+                window.closeAnalysisModal();
+            }
+        };
+
         window.switchView = function(m) {
             document.getElementById('view-inventory').classList.toggle('hidden', m !== 'inventory');
             document.getElementById('view-raw').classList.toggle('hidden', m !== 'raw');
             document.getElementById('tab-inventory').className = m === 'inventory' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
             document.getElementById('tab-raw').className = m === 'raw' ? "px-5 py-2 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all font-black" : "px-5 py-2 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all font-black";
-            if (m === 'raw') window.renderRawTable();
+            if (m === 'raw') renderRawTableFn();
         };
 
         window.switchPigView = function(mode) {
             pigViewMode = mode;
             document.getElementById('pig-view-btn-batch').className = mode === 'batch' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
             document.getElementById('pig-view-btn-house').className = mode === 'house' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-white shadow-sm text-slate-900 transition-all" : "px-4 py-1.5 rounded-lg text-xs font-black text-slate-400 hover:text-slate-600 transition-all";
-            
             document.getElementById('pig-view-batch').classList.toggle('hidden', mode !== 'batch');
             document.getElementById('pig-view-house').classList.toggle('hidden', mode !== 'house');
-            
-            render();
+            renderFn();
         };
 
         window.listenCloud = function() {
@@ -714,7 +934,7 @@
                     newRecs[data.batchId].push(data);
                 });
                 cloudRecords = newRecs;
-                try { render(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
+                try { renderFn(); } catch(e) { console.error("Render Error in Cloud Listener", e); }
                 document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
             }, (err) => console.error("Firestore Records Error:", err));
 
@@ -722,7 +942,7 @@
                 const newBatches = {};
                 snap.forEach(d => { newBatches[d.id] = d.data(); });
                 manualBatches = newBatches;
-                try { render(); } catch(e) { console.error("Render Error in Batch Listener", e); }
+                try { renderFn(); } catch(e) { console.error("Render Error in Batch Listener", e); }
             }, (err) => console.error("Firestore Batches Error:", err));
 
             onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords'), (snap) => {
@@ -734,14 +954,12 @@
                      document.getElementById('excel-count').innerHTML = `<i data-lucide="cloud" class="w-3 h-3 text-blue-400"></i> 雲端地基：${excelData.length} 批`;
                      document.getElementById('cloud-status').innerHTML = '<i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> 全系統連線中';
                 }
-                try { render(); } catch(e) { console.error("Render Error in Base Listener", e); }
+                try { renderFn(); } catch(e) { console.error("Render Error in Base Listener", e); }
                 document.getElementById('last-sync').innerText = `上次同步: ${new Date().toLocaleTimeString()}`;
             });
         };
 
-        window.render = render; // Expose render to window
-
-        // Bind all other functions to window
+        // ... (Other handlers like handleFileUpload, openSaleModal, etc. defined here)
         window.handleFileUpload = async function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -816,11 +1034,192 @@
                 await batch.commit();
                 excelData = []; manualBatches = {}; cloudRecords = {};
                 window.closeConfirmModal();
-                render();
-                window.renderRawTable();
+                renderFn();
+                renderRawTableFn();
                 document.getElementById('excel-count').innerHTML = `<i data-lucide="file-warning"></i> 重置完成`;
                 window.showMessage("✅ 系統已重置", "info");
             } catch (e) { window.showMessage("❌ 重置失敗", "error"); }
+        };
+
+        window.openSaleModal = () => {
+            const status = calculateStatus();
+            const list = document.getElementById('sale-batch-list');
+            document.getElementById('sale-date').value = selectedDate;
+            document.getElementById('selected-sale-container').classList.add('hidden');
+            const candidates = status.filter(b => b.isActual && b.type === "肉豬" && parseFloat(b.weekAge) > 20);
+            list.innerHTML = candidates.map(b => `<button onclick="window.selectSaleBatch('${b.id}', ${b.headcount}, ${b.avgWeight}, '${b.stage}', '${b.weekAge}W')" class="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-amber-50 hover:border-amber-400 transition-all text-left font-black"><div class="text-[10px] text-slate-400">${b.stage} | W${b.weekAge}</div><div class="text-sm font-black">${b.id}</div><div class="text-[10px] text-amber-600">目前存欄: ${b.headcount} 頭</div></button>`).join('') || "<p class='col-span-2 text-center text-slate-300 py-10 font-black'>目前無適齡出豬批次 (W20+)</p>";
+            document.getElementById('sale-modal').classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        window.selectSaleBatch = (id, currentHeadcount, avg, stage, age) => {
+            window.selectedSaleId = id;
+            document.getElementById('selected-sale-id').innerText = id;
+            document.getElementById('selected-sale-hint').innerText = `${stage} | ${age}`;
+            document.getElementById('selected-sale-max').innerText = currentHeadcount;
+            document.getElementById('sale-count').value = ""; 
+            document.getElementById('sale-avg-weight').value = "";
+            document.getElementById('selected-sale-container').classList.remove('hidden');
+            window.showMessage(`已選取批次 ${id}`);
+        };
+
+        window.submitSale = async () => {
+            if(!window.selectedSaleId) return alert("請先選擇一個批次");
+            const count = window.cleanNum(document.getElementById('sale-count').value);
+            const avg = window.cleanNum(document.getElementById('sale-avg-weight').value);
+            const saleDate = document.getElementById('sale-date').value;
+            const now = new Date().toISOString();
+            if (count <= 0 || avg <= 0) return alert("頭數與均重必須大於 0");
+            const uniqueId = `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`;
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
+            await setDoc(ref, { batchId: window.selectedSaleId, date: saleDate, soldCount: count, avgWeight: avg, updatedAt: now });
+            window.showMessage(`✅ 已成功錄入單筆出豬交易：${count} 頭，均重 ${avg}kg`);
+            document.getElementById('sale-modal').classList.add('hidden');
+        };
+
+        window.openSmartMatingModal = () => {
+            const today = new Date(); const diff = today.getTime() - CONFIG.ANCHOR.getTime(); const cycles = Math.ceil(diff / (21 * 86400000));
+            const suggestDate = new Date(CONFIG.ANCHOR.getTime() + cycles * 21 * 86400000); const suggestDiff = Math.round((suggestDate - CONFIG.ANCHOR) / (21 * 86400000));
+            const x = (Math.floor(suggestDiff / 7) % 9 + 9) % 9 + 1; const y = (suggestDiff % 7 + 7) % 7 + 1; const id = `${suggestDate.getFullYear()}-G${x}${y}`;
+            const matingIdInput = document.getElementById('mating-id'); if (matingIdInput) matingIdInput.value = id;
+            const matingDateInput = document.getElementById('mating-date'); if (matingDateInput) matingDateInput.value = suggestDate.toISOString().split('T')[0];
+            const d = new Date(suggestDate); d.setDate(d.getDate() + 115);
+            const suggestBirthEl = document.getElementById('suggest-birth'); if (suggestBirthEl) suggestBirthEl.innerText = d.toISOString().split('T')[0];
+            document.getElementById('mating-modal').classList.remove('hidden');
+        };
+
+        window.submitSmartMating = async () => {
+            const id = document.getElementById('mating-id').value.trim(); const count = window.cleanNum(document.getElementById('mating-count').value);
+            const date = document.getElementById('mating-date').value; const birth = document.getElementById('suggest-birth').innerText;
+            if(!id || count <= 0) return alert("請輸入完整資料");
+            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', id), { id, '批次': id, '配種日期': date, '分娩日期': birth, '配種數': count, updatedAt: new Date().toISOString() });
+            window.showMessage("✅ 配種批次已寫入雲端基本紀錄"); document.getElementById('mating-modal').classList.add('hidden');
+        };
+
+        window.openTransferModal = () => {
+            const status = calculateStatus(); const list = document.getElementById('transfer-batch-list'); if (!list) return;
+            const candidates = status.filter(b => b.isActual && (parseFloat(b.weekAge) > 3));
+            list.innerHTML = candidates.map(b => `
+                <button onclick="window.selectTransferBatch('${b.id}', ${b.headcount}, ${b.weekAge})" class="p-4 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-blue-50 hover:border-blue-200 transition-all text-left font-black">
+                    <div class="text-[10px] text-slate-400">W${b.weekAge} | ${b.location}</div>
+                    <div class="text-sm font-black">${b.id}</div><div class="text-[10px] text-blue-600">當前：${b.headcount} 頭</div>
+                </button>
+            `).join('') || "<p class='col-span-2 text-center text-slate-300 py-10 font-black'>目前無建議轉舍的批次</p>";
+            document.getElementById('transfer-modal').classList.remove('hidden');
+        };
+
+        window.selectTransferBatch = (id, count, age) => { 
+            window.selectedTransferId = id; 
+            const countInput = document.getElementById('transfer-count'); 
+            if (countInput) countInput.value = count; 
+            const targetSelect = document.getElementById('transfer-target');
+            let options = "";
+            if (age >= 3 && age <= 6) { options = `<optgroup label="✨ 推薦：進入保育階段">${['一','二','三','四','五'].map(n => `<option value="保${n}" data-field="nursery">保育舍 - 保${n}</option>`).join('')}</optgroup>`; } else if (age >= 10 && age <= 13) { options = `<optgroup label="✨ 推薦：進入小豬階段">${['一','二','三','四','五'].map(n => `<option value="小${n}" data-field="small">小豬舍 - 小${n}</option>`).join('')}</optgroup>`; } else if (age >= 18 && age <= 21) { options = `<optgroup label="✨ 推薦：進入中豬階段">${['一','二','三','四','五'].map(n => `<option value="中${n}" data-field="medium">中豬舍 - 中${n}</option>`).join('')}</optgroup>`; } else if (age >= 23) { options = `<optgroup label="✨ 推薦：進入大豬階段">${['一','二','三','四','五'].map(n => `<option value="大${n}" data-field="large">大豬舍 - 大${n}</option>`).join('')}</optgroup>`; } else { options = `<option value="">請選擇畜舍</option><option value="保一" data-field="nursery">保育舍</option><option value="小一" data-field="small">小豬舍</option><option value="中一" data-field="medium">中豬舍</option><option value="大一" data-field="large">大豬舍</option>`; }
+            targetSelect.innerHTML = options;
+            window.showMessage(`已選取 ${id} (W${age})`); 
+        };
+
+        window.submitTransfer = async () => {
+            const targetSelect = document.getElementById('transfer-target');
+            const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+            if(!window.selectedTransferId || !selectedOption || !selectedOption.value) return alert("請先選取批次與目標畜舍");
+            const houseName = selectedOption.value;
+            const stageField = selectedOption.getAttribute('data-field');
+            const count = window.cleanNum(document.getElementById('transfer-count').value);
+            const countFieldMap = { 'nursery': '入保育舍豬量', 'small': '入小豬舍豬量', 'medium': '入中豬舍豬量', 'large': '入大豬舍豬量' };
+            const houseFieldMap = { 'nursery': '保舍', 'small': '小舍', 'medium': '中舍', 'large': '大舍' };
+            const dateFieldMap = { 'nursery': 'transDate_nursery', 'small': 'transDate_small', 'medium': 'transDate_medium', 'large': 'transDate_large' };
+            const updateData = { id: window.selectedTransferId, [countFieldMap[stageField]]: count, [houseFieldMap[stageField]]: houseName, [dateFieldMap[stageField]]: selectedDate, updatedAt: new Date().toISOString() };
+            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', window.selectedTransferId), updateData, { merge: true });
+            window.showMessage(`✅ 已成功錄入轉舍：${houseName} (${count} 頭)`); 
+            document.getElementById('transfer-modal').classList.add('hidden');
+        };
+
+        window.openSpecialEdit = (id, title) => {
+            editingBatchId = id;
+            document.getElementById('modal-batch-id').innerText = title; 
+            document.getElementById('modal-date').value = selectedDate;
+            const currentData = manualBatches[id] || { count: 0 };
+            const inputs = document.getElementById('modal-inputs');
+            if(!inputs) return;
+            inputs.innerHTML = `<div><label class="text-[10px] text-slate-400 font-black block mb-2">更新日期</label><input type="date" id="special-date" value="${selectedDate}" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black mb-4"></div><div><label class="text-[10px] text-slate-400 font-black block mb-2">目前數量 (頭)</label><input type="number" id="special-count" value="${currentData.count || 0}" class="w-full p-4 bg-slate-50 rounded-2xl text-4xl text-center font-black"></div>`;
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveSpecialRecord;
+            saveBtn.innerText = "更新特殊庫存";
+            document.getElementById('edit-modal').classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        window.saveSpecialRecord = async () => {
+            const date = document.getElementById('special-date').value;
+            const count = window.cleanNum(document.getElementById('special-count').value);
+            if (count < 0) return alert("數量不能為負數");
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'manualBatches', editingBatchId);
+            await setDoc(ref, { id: editingBatchId, date: date, count: count, updatedAt: new Date().toISOString() }, { merge: true });
+            window.showMessage(`✅ ${editingBatchId === 'SPECIAL_PROBLEM' ? '問題母豬' : '律齊媒母豬'} 庫存已更新`);
+            document.getElementById('edit-modal').classList.add('hidden');
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveLossRecord;
+            saveBtn.innerText = "確認儲存並同步雲端";
+        };
+
+        window.openEditModal = (bid, t) => {
+            editingBatchId = bid;
+            document.getElementById('modal-batch-id').innerText = bid;
+            document.getElementById('modal-date').value = selectedDate;
+            const inputs = document.getElementById('modal-inputs');
+            if(!inputs) return;
+            const saveBtn = document.getElementById('save-loss-btn');
+            saveBtn.onclick = window.saveLossRecord;
+            saveBtn.innerText = "確認儲存並同步雲端";
+            if(t === 'sow') {
+                inputs.innerHTML = `<div class="grid grid-cols-2 gap-4"><div><label class="text-[10px] text-slate-400">流產</label><input type="number" id="inp-abortion" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">陰性</label><input type="number" id="inp-negative" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">重發情</label><input type="number" id="inp-return" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div><div><label class="text-[10px] text-slate-400">母豬死亡/淘汰</label><input type="number" id="inp-sowdeath" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-xl font-black"></div></div>`;
+            } else {
+                inputs.innerHTML = `<div><label class="text-[10px] text-slate-400">當日肉豬死亡 (頭)</label><input type="number" id="inp-pigdeath" value="0" class="w-full p-3 bg-slate-50 rounded-2xl text-4xl text-center font-black"></div>`;
+            }
+            document.getElementById('edit-modal').classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        window.saveLossRecord = async () => {
+            const dateInput = document.getElementById('modal-date');
+            const d = dateInput ? dateInput.value : selectedDate;
+            const now = new Date().toISOString();
+            const uniqueId = `${editingBatchId}_loss_${now.replace(/[^0-9]/g, "")}`;
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
+            const p = { batchId: editingBatchId, date: d, updatedAt: now };
+            const inpAbortion = document.getElementById('inp-abortion');
+            if(inpAbortion) { 
+                p.abortion = window.cleanNum(inpAbortion.value); p.negative = window.cleanNum(document.getElementById('inp-negative').value); p.returnEstrus = window.cleanNum(document.getElementById('inp-return').value); p.sowDeath = window.cleanNum(document.getElementById('inp-sowdeath').value); 
+            } else { 
+                p.pigDeath = window.cleanNum(document.getElementById('inp-pigdeath').value); 
+            }
+            await setDoc(ref, p);
+            window.showMessage("✅ 異動紀錄已成功同步雲端");
+            document.getElementById('edit-modal').classList.add('hidden');
+        };
+
+        window.openHistoryEdit = (docId, type, val, date) => {
+            editingHistoryDocId = docId;
+            editingHistoryType = type;
+            const container = document.getElementById('history-edit-inputs');
+            const labelMap = { 'pigDeath': '肉豬死亡數', 'sowDeath': '母豬損耗數', 'soldCount': '出豬頭數', 'abortion': '流產數', 'negative': '陰性數', 'returnEstrus': '重發情數' };
+            container.innerHTML = `<div><label class="text-[10px] text-indigo-400 font-black block mb-2">發生日期</label><input type="date" id="hist-edit-date" value="${date}" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-black mb-4 outline-none focus:ring-2 ring-indigo-500/20"></div><div><label class="text-[10px] text-indigo-400 font-black block mb-2">${labelMap[type] || '數量'}</label><input type="number" id="hist-edit-val" value="${val}" class="w-full p-4 bg-slate-50 rounded-2xl text-4xl text-center font-black outline-none focus:ring-2 ring-indigo-500/20"></div>`;
+            document.getElementById('history-save-btn').onclick = window.submitHistoryEdit;
+            document.getElementById('history-edit-modal').classList.remove('hidden');
+        };
+
+        window.submitHistoryEdit = async () => {
+            if (!editingHistoryDocId || !editingHistoryType) return;
+            const newDate = document.getElementById('hist-edit-date').value;
+            const newVal = window.cleanNum(document.getElementById('hist-edit-val').value);
+            if (newVal < 0) return alert("數值不能為負數");
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', editingHistoryDocId);
+            const updatePayload = { date: newDate, [editingHistoryType]: newVal, updatedAt: new Date().toISOString() };
+            await setDoc(ref, updatePayload, { merge: true });
+            window.showMessage("✅ 歷史紀錄已修正，數據已重新計算");
+            document.getElementById('history-edit-modal').classList.add('hidden');
+            if (!document.getElementById('analysis-modal').classList.contains('hidden')) { window.refreshAnalysisModal(); }
         };
         
         // ** Explicitly Define initAuth on Window to solve ReferenceError **
@@ -839,7 +1238,7 @@
 
         window.onload = () => {
             document.getElementById('file-input').addEventListener('change', window.handleFileUpload);
-            document.getElementById('date-picker').addEventListener('change', (e) => { selectedDate = e.target.value; render(); });
+            document.getElementById('date-picker').addEventListener('change', (e) => { selectedDate = e.target.value; renderFn(); });
             
             // 監聽 Auth 狀態，確保 user 物件就緒後才啟動
             onAuthStateChanged(auth, (u) => {
