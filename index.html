@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.43 (絕對穩固版)</title>
+    <title>永隆智慧管理 v10.4 (本地備份穩定修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -128,7 +128,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.43</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v10.3</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -297,7 +297,7 @@
         </div>
     </div>
 
-    <!-- Mating Modal -->
+    <!-- Mating Modal (Restored Structure for safety) -->
     <div id="mating-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-w-xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
             <div class="bg-pink-600 p-10 text-white flex justify-between items-center font-black">
@@ -403,14 +403,9 @@
         <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
             <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
                 <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
-                <div>
-                    <h3 class="font-black text-indigo-900">修正歷史紀錄</h3>
-                    <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p>
-                </div>
+                <div><h3 class="font-black text-indigo-900">修正歷史紀錄</h3><p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p></div>
             </div>
-            <div id="history-edit-inputs" class="space-y-4 mb-6">
-                <!-- 動態插入欄位 -->
-            </div>
+            <div id="history-edit-inputs" class="space-y-4 mb-6"></div>
             <div class="flex gap-3">
                 <button onclick="window.closeHistoryEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
                 <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
@@ -474,12 +469,7 @@
         window.safeStr = (v) => {
             if (v instanceof Date) return v.toISOString().split('T')[0];
             if (typeof v === 'number' && v > 40000) return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
-            // Date Format Optimization: YYYY-MM-DD
-            const s = String(v ?? "").trim();
-            if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                return s.split('T')[0]; 
-            }
-            return s;
+            return String(v ?? "").trim();
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
         
@@ -647,7 +637,7 @@
                     const box = document.getElementById(`box-${s}`);
                     if (box) box.className = "p-8 rounded-[40px] text-center border-2 border-transparent bg-slate-50/50 font-black";
                     const status = document.getElementById(`status-${s}`);
-                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block"; }
+                    if (status) { status.innerText = "等待中"; status.className = "text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black"; }
                     const rate = document.getElementById(`rate-${s}`);
                     if (rate) rate.innerText = "0%";
                 });
@@ -975,68 +965,105 @@
         window.handleFileUpload = async function(e) {
             const file = e.target.files[0];
             if (!file) return;
+            
+            // Check for XLSX availability
+            if (typeof XLSX === 'undefined') {
+                window.showMessage("❌ Excel 元件尚未載入，請稍候重試", "error");
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = async (event) => {
-                const data = new Uint8Array(event.target.result);
-                const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
-                const basicSheet = wb.Sheets[basicSheetName];
-                const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
-                if (!headerRow || !['批次','配種日期','分娩日期'].every(h => headerRow.includes(h))) {
-                    window.showMessage("❌ 檔案格式錯誤", "error");
-                    return;
-                }
-                const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
-                    const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
-                    // Date Format Optimization: YYYY-MM-DD (Local Time)
-                    ['配種日期', '分娩日期'].forEach(k => {
-                        if (nr[k] instanceof Date) {
-                             const y = nr[k].getFullYear();
-                             const m = String(nr[k].getMonth() + 1).padStart(2, '0');
-                             const d = String(nr[k].getDate()).padStart(2, '0');
-                             nr[k] = `${y}-${m}-${d}`;
-                        }
-                    });
-                    return nr;
-                });
-                
-                // Update local state immediately for instant feedback
-                excelData = parsedData;
-                renderFn();
-                
-                window.showMessage("☁️ 正在上傳基礎資料...", "info");
                 try {
-                    const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
-                    const q = query(baseRef);
-                    const snapshot = await getDocs(q);
-                    const deleteChunks = []; let currentDeleteChunk = [];
-                    snapshot.docs.forEach((doc, index) => {
-                        currentDeleteChunk.push(doc.ref);
-                        if (currentDeleteChunk.length === 400 || index === snapshot.docs.length - 1) {
-                            deleteChunks.push([...currentDeleteChunk]);
-                            currentDeleteChunk = [];
-                        }
-                    });
-                    for (const chunk of deleteChunks) {
-                         const batchDelete = writeBatch(db);
-                         chunk.forEach(ref => batchDelete.delete(ref));
-                         await batchDelete.commit();
+                    const data = new Uint8Array(event.target.result);
+                    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                    const basicSheetName = wb.SheetNames.includes("基本紀錄") ? "基本紀錄" : wb.SheetNames[0];
+                    const basicSheet = wb.Sheets[basicSheetName];
+                    const headerRow = XLSX.utils.sheet_to_json(basicSheet, { header: 1 })[0];
+                    
+                    if (!headerRow || !['批次','配種日期','分娩日期'].every(h => headerRow.includes(h))) {
+                        window.showMessage("❌ 檔案格式錯誤，必須包含：批次、配種日期、分娩日期", "error");
+                        return;
                     }
-                    const chunks = [];
-                    for (let i = 0; i < parsedData.length; i += 400) { chunks.push(parsedData.slice(i, i + 400)); }
-                    for (const chunk of chunks) {
-                        const batchWrite = writeBatch(db);
-                        chunk.forEach(row => {
-                            if (row['批次']) {
-                                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords', String(row['批次']));
-                                batchWrite.set(docRef, row);
+
+                    // 1. Prepare Base Records with Clean Dates
+                    const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
+                        const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
+                        // Date Format Optimization: YYYY-MM-DD (Local Time)
+                        ['配種日期', '分娩日期'].forEach(k => {
+                            if (nr[k] instanceof Date) {
+                                 const y = nr[k].getFullYear();
+                                 const m = String(nr[k].getMonth() + 1).padStart(2, '0');
+                                 const d = String(nr[k].getDate()).padStart(2, '0');
+                                 nr[k] = `${y}-${m}-${d}`;
                             }
                         });
-                        await batchWrite.commit();
-                    }
-                    window.showMessage("✅ 雲端同步完成！", "info");
-                    e.target.value = '';
-                } catch (err) { console.error(err); window.showMessage("❌ 上傳失敗：" + err.message, "error"); }
+                        return nr;
+                    });
+                    
+                    // Update local state immediately
+                    excelData = parsedData;
+                    renderFn();
+                    
+                    window.showMessage("☁️ 正在上傳基礎資料...", "info");
+                    try {
+                        const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
+                        const q = query(baseRef);
+                        const snapshot = await getDocs(q);
+                        
+                        const deleteChunks = [];
+                        let currentDeleteChunk = [];
+                        
+                        snapshot.docs.forEach((doc, index) => {
+                            currentDeleteChunk.push(doc.ref);
+                            if (currentDeleteChunk.length === 400 || index === snapshot.docs.length - 1) {
+                                deleteChunks.push([...currentDeleteChunk]);
+                                currentDeleteChunk = [];
+                            }
+                        });
+
+                        for (const chunk of deleteChunks) {
+                             const batchDelete = writeBatch(db);
+                             chunk.forEach(ref => batchDelete.delete(ref));
+                             await batchDelete.commit();
+                        }
+
+                        const chunks = [];
+                        for (let i = 0; i < parsedData.length; i += 400) { chunks.push(parsedData.slice(i, i + 400)); }
+                        for (const chunk of chunks) {
+                            const batchWrite = writeBatch(db);
+                            chunk.forEach(row => {
+                                if (row['批次']) {
+                                    const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords', String(row['批次']));
+                                    batchWrite.set(docRef, row);
+                                }
+                            });
+                            await batchWrite.commit();
+                        }
+                        
+                        // Handle Modification Logs
+                        if (wb.SheetNames.includes("修改紀錄")) {
+                            const modData = XLSX.utils.sheet_to_json(wb.Sheets["修改紀錄"]);
+                            const bMod = writeBatch(db);
+                            let modCount = 0;
+                            modData.forEach(row => {
+                                 const bid = row['批次ID']; const d = window.safeStr(row['紀錄日期']); const ut = row['更新時間'] || new Date().toISOString();
+                                 if (bid && d) {
+                                     const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${bid}_${ut.replace(/[^0-9]/g, "")}`);
+                                     bMod.set(ref, { batchId: bid, date: d, abortion: window.cleanNum(row['流產']), negative: window.cleanNum(row['陰性']), returnEstrus: window.cleanNum(row['重發情']), sowDeath: window.cleanNum(row['母豬損耗']), pigDeath: window.cleanNum(row['肉豬死亡']), soldCount: window.cleanNum(row['出豬量']), avgWeight: window.cleanNum(row['平均重']), updatedAt: ut }, { merge: true });
+                                     modCount++;
+                                 }
+                            });
+                            if (modCount > 0) await bMod.commit();
+                        }
+
+                        window.showMessage("✅ 雲端同步完成！所有裝置已更新", "info");
+                        e.target.value = '';
+                    } catch (err) { console.error(err); window.showMessage("❌ 上傳失敗：" + err.message, "error"); }
+                } catch (readErr) {
+                    console.error("File Read Error:", readErr);
+                    window.showMessage("❌ 檔案讀取失敗", "error");
+                }
             };
             reader.readAsArrayBuffer(file);
         };
@@ -1096,8 +1123,7 @@
             const saleDate = document.getElementById('sale-date').value;
             const now = new Date().toISOString();
             if (count <= 0 || avg <= 0) return alert("頭數與均重必須大於 0");
-            const uniqueId = `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`;
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`);
             await setDoc(ref, { batchId: window.selectedSaleId, date: saleDate, soldCount: count, avgWeight: avg, updatedAt: now });
             window.showMessage(`✅ 已成功錄入單筆出豬交易：${count} 頭，均重 ${avg}kg`);
             document.getElementById('sale-modal').classList.add('hidden');
@@ -1247,7 +1273,74 @@
             document.getElementById('history-edit-modal').classList.add('hidden');
             if (!document.getElementById('analysis-modal').classList.contains('hidden')) { window.refreshAnalysisModal(); }
         };
-        
+
+        // ** 重點修正：本地優先備份 **
+        // 直接從記憶體 (excelData, cloudRecords) 產出備份，無需再次讀取雲端
+        window.exportUniversalBackup = () => {
+            try {
+                if (typeof XLSX === 'undefined') {
+                     return window.showMessage("⏳ Excel 元件尚未載入，請稍候重試", "error");
+                }
+                
+                // 檢查本地是否有資料
+                if (excelData.length === 0 && Object.keys(manualBatches).length === 0) {
+                     return window.showMessage("⚠️ 目前無資料可供匯出，請先讀入數據或建立資料", "error");
+                }
+
+                // 1. 準備基本紀錄表
+                const allIds = new Set();
+                excelData.forEach(r => { if(r['批次']) allIds.add(String(r['批次'])); });
+                Object.keys(manualBatches).forEach(id => allIds.add(id));
+                const fullBasicData = Array.from(allIds).map(id => {
+                    const manual = manualBatches[id];
+                    const excel = excelData.find(r => String(r['批次']) === id);
+                    const row = {};
+                    CONFIG.BASIC_HEADERS.forEach(h => {
+                        let val = "";
+                        if (manual && manual[h] !== undefined) val = manual[h];
+                        else if (excel && excel[h] !== undefined) val = excel[h];
+                        
+                        // Clean date format on export
+                        if (['配種日期', '分娩日期'].includes(h) && val) {
+                            row[h] = window.safeStr(val);
+                        } else {
+                            row[h] = (h === '批次' && !val) ? id : val;
+                        }
+                    });
+                    return row;
+                });
+                
+                // 2. 準備異動紀錄表
+                const modificationLogs = [];
+                Object.keys(cloudRecords).forEach(bid => {
+                    cloudRecords[bid].forEach(rec => {
+                        modificationLogs.push({ 
+                            '批次ID': bid, 
+                            '紀錄日期': rec.date, 
+                            '流產': rec.abortion || 0, 
+                            '陰性': rec.negative || 0, 
+                            '重發情': rec.returnEstrus || 0, 
+                            '母豬損耗': rec.sowDeath || 0, 
+                            '肉豬死亡': rec.pigDeath || 0, 
+                            '出豬量': rec.soldCount || 0, 
+                            '平均重': rec.avgWeight || 0, 
+                            '更新時間': rec.updatedAt 
+                        });
+                    });
+                });
+                
+                // 3. 產生 Excel
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fullBasicData), "基本紀錄");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modificationLogs), "修改紀錄");
+                XLSX.writeFile(wb, `永隆牧場整合全局交易備份_${selectedDate}.xlsx`);
+                window.showMessage("✅ 全局雙頁面交易備份已產生 (本地打包)");
+            } catch(e) {
+                console.error("Export Error:", e);
+                window.showMessage("❌ 匯出失敗：" + e.message, "error");
+            }
+        };
+
         // ** Explicitly Define initAuth on Window to solve ReferenceError **
         window.initAuth = async function() {
              try {
@@ -1260,21 +1353,6 @@
                 console.error("Auth Failed:", error);
                 window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
             }
-        };
-
-        // --- Explicitly Defined Close Modal Functions on Window ---
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        // window.closeSmartMatingModal removed
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
-        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
-        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
-        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
-
-        // New function to open confirm modal
-        window.clearCloudDatabase = function() {
-            document.getElementById('confirm-modal').classList.remove('hidden');
         };
 
         window.onload = () => {
