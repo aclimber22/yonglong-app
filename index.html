@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.40 (日期格式優化版)</title>
+    <title>永隆智慧管理 v9.9.41 (備份功能防護版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -125,7 +125,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.40</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.41</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -347,7 +347,6 @@
         </div>
     </div>
 
-    <!-- Edit Modal -->
     <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade font-black">
             <div id="modal-header-color" class="bg-indigo-600 p-8 text-white flex justify-between items-center font-black">
@@ -465,7 +464,12 @@
         window.safeStr = (v) => {
             if (v instanceof Date) return v.toISOString().split('T')[0];
             if (typeof v === 'number' && v > 40000) return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
-            return String(v ?? "").trim();
+            // NEW: Clean Date String logic in display
+            const s = String(v ?? "").trim();
+            if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
+                return s.split('T')[0]; // Extract YYYY-MM-DD from ISO
+            }
+            return s;
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
         
@@ -1244,21 +1248,6 @@
                 console.error("Auth Failed:", error);
                 window.showMessage("⚠️ 登入驗證失敗，請重新整理", "error");
             }
-        };
-
-        // --- Explicitly Defined Close Modal Functions on Window ---
-        window.closeAnalysisModal = () => document.getElementById('analysis-modal').classList.add('hidden');
-        window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-        // window.closeSmartMatingModal removed
-        window.closeTransferModal = () => document.getElementById('transfer-modal').classList.add('hidden');
-        window.closeSaleModal = () => document.getElementById('sale-modal').classList.add('hidden');
-        window.closeConfirmModal = () => document.getElementById('confirm-modal').classList.add('hidden');
-        window.closeHistoryEditModal = () => document.getElementById('history-edit-modal').classList.add('hidden');
-        window.closeSmartMatingModal = () => document.getElementById('mating-modal').classList.add('hidden');
-
-        // New function to open confirm modal
-        window.clearCloudDatabase = function() {
-            document.getElementById('confirm-modal').classList.remove('hidden');
         };
 
         window.onload = () => {
