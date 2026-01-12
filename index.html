@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>永隆智慧管理 v9.9.43 (絕對穩固版)</title>
+    <title>永隆智慧管理 v9.9.47 (權限與備份總修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -34,7 +34,6 @@
         window.clearCloudDatabase = notReady;
         window.executeReset = notReady;
         window.initAuth = function() {}; // 靜默佔位
-        window.listenCloud = function() {}; // 靜默佔位
         
         // Modals
         window.openSaleModal = notReady;
@@ -64,8 +63,6 @@
 
         window.openAnalysisModal = notReady;
         window.closeAnalysisModal = function() { document.getElementById('analysis-modal').classList.add('hidden'); };
-        window.renderAnalysisContent = notReady;
-        window.refreshAnalysisModal = notReady;
         
         window.closeConfirmModal = function() { document.getElementById('confirm-modal').classList.add('hidden'); };
         window.exportUniversalBackup = notReady;
@@ -116,6 +113,7 @@
             <div class="flex items-center gap-4 font-black">
                 <span id="cloud-status" class="flex items-center gap-1.5 font-black"><i data-lucide="refresh-cw" class="w-3 h-3 animate-spin"></i> 正在連線至永隆牧場雲端資料庫...</span>
                 <span id="excel-count" class="flex items-center gap-1.5 font-black"><i data-lucide="file-warning" class="w-3 h-3"></i> 尚未載入檔案</span>
+                <span id="env-badge" class="hidden px-2 py-0.5 rounded text-[9px] font-bold bg-slate-700 text-slate-300"></span>
             </div>
             <div class="flex items-center gap-4 font-black">
                 <button onclick="window.clearCloudDatabase()" class="text-rose-400 hover:text-rose-300 transition-colors uppercase cursor-pointer font-black">[ ⚠️ 重置雲端資料 ]</button>
@@ -128,7 +126,7 @@
                 <div class="flex items-center gap-4 font-black">
                     <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg text-white font-black"><i data-lucide="activity"></i></div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.43</span></h1>
+                        <h1 class="text-xl font-black tracking-tight uppercase text-slate-900 font-black">永隆智慧管理 <span class="text-indigo-600 italic font-black">v9.9.47</span></h1>
                         <div class="flex items-center gap-2 font-black">
                             <span id="week-display" class="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 shadow-sm font-black">載入中</span>
                             <input type="date" id="date-picker" class="text-[11px] font-black text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-indigo-600 font-black">
@@ -236,112 +234,22 @@
     </div>
 
     <!-- Modals -->
-    <!-- Analysis Modal -->
-    <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black">
-        <div class="bg-white w-full max-w-5xl rounded-[60px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade font-black">
-            <div class="p-10 border-b border-slate-50 flex justify-between items-center bg-white font-black">
-                <div class="flex items-center gap-4">
-                    <div class="bg-blue-600 p-4 rounded-3xl text-white shadow-lg font-black"><i data-lucide="bar-chart-3"></i></div>
-                    <div>
-                        <div class="flex items-baseline gap-3">
-                            <h3 id="analysis-batch-id" class="text-3xl font-black tracking-tighter font-black">BATCH-ID</h3>
-                            <span id="analysis-total-rate" class="text-sm font-black bg-slate-900 text-white px-3 py-1 rounded-full font-black">全期育成 0%</span>
-                        </div>
-                        <p class="text-slate-400 text-xs font-black uppercase mt-1">Efficiency & Modification Logs</p>
-                    </div>
-                </div>
-                <button onclick="window.closeAnalysisModal()" class="p-4 text-slate-300 hover:text-rose-500 transition-all font-black"><i data-lucide="x" class="w-10 h-10 font-black"></i></button>
+    <!-- 歷史紀錄編輯視窗 -->
+    <div id="history-edit-modal" class="fixed inset-0 z-[5500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
+            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
+                <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
+                <div><h3 class="font-black text-indigo-900">修正歷史紀錄</h3><p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p></div>
             </div>
-            <div class="p-10 overflow-y-auto no-scrollbar space-y-10 font-black">
-                <div class="grid grid-cols-3 gap-6 font-black">
-                    <div id="box-nursery" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50">
-                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">保育期 (W4-W11)</p>
-                        <p id="rate-nursery" class="text-4xl font-black">0%</p>
-                        <p id="status-nursery" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
-                    </div>
-                    <div id="box-small" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
-                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">小豬期 (W11-W19)</p>
-                        <p id="rate-small" class="text-4xl font-black">0%</p>
-                        <p id="status-small" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
-                    </div>
-                    <div id="box-medium" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
-                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">中豬期 (W19-W24)</p>
-                        <p id="rate-medium" class="text-4xl font-black">0%</p>
-                        <p id="status-medium" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
-                    </div>
-                </div>
-                <div class="bg-white rounded-[40px] border-2 border-slate-50 p-10 font-black">
-                    <h4 class="text-lg font-black mb-8 flex items-center gap-2"><i data-lucide="trending-up" class="text-blue-600"></i> 生長週趨勢分析</h4>
-                    <div style="height: 400px; position: relative;"><canvas id="lifecycle-chart"></canvas></div>
-                </div>
-                <div id="analysis-history-list" class="mt-8 font-black"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Modal -->
-    <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade font-black">
-            <div id="modal-header-color" class="bg-indigo-600 p-8 text-white flex justify-between items-center font-black">
-                <div><h3 id="modal-batch-id" class="text-2xl font-black italic">BATCH ID</h3><p class="text-indigo-200 text-[10px] uppercase font-bold tracking-widest mt-1">Modification Engine</p></div>
-                <button onclick="window.closeEditModal()" class="p-2 hover:bg-white/20 rounded-full transition-all font-black"><i data-lucide="x" class="font-black"></i></button>
-            </div>
-            <div class="p-8 space-y-6 font-black">
-                <div class="bg-orange-50 p-5 rounded-3xl border border-orange-100 font-black">
-                    <label class="text-[10px] text-orange-600 uppercase mb-2 block tracking-widest font-black">異動紀錄日期</label>
-                    <input type="date" id="modal-date" class="w-full bg-white border-2 border-transparent focus:border-orange-400 outline-none p-3 rounded-2xl text-xl font-black transition-all font-black">
-                </div>
-                <div id="modal-inputs" class="space-y-4 font-black"></div>
-                <button id="save-loss-btn" onclick="window.saveLossRecord()" class="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">確認儲存並同步雲端</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mating Modal -->
-    <div id="mating-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
-            <div class="bg-pink-600 p-10 text-white flex justify-between items-center font-black">
-                <div><h3 class="text-3xl font-black tracking-tighter">智慧配種錄入</h3><p class="text-pink-200 text-xs font-bold uppercase mt-1">Suggested Batch Planning</p></div>
-                <button onclick="window.closeSmartMatingModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
-            </div>
-            <div class="p-10 space-y-8 font-black">
-                <div class="grid grid-cols-2 gap-6 font-black">
-                    <div class="col-span-2"><label class="text-[10px] text-slate-400 uppercase mb-2 block">推薦批次 ID</label><input type="text" id="mating-id" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl text-pink-600 font-black"></div>
-                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種日期</label><input type="date" id="mating-date" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-xl font-black"></div>
-                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種母豬頭數</label><input type="number" id="mating-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl font-black"></div>
-                    <div class="col-span-2 bg-slate-50 p-6 rounded-3xl border border-slate-100 font-black">
-                        <div class="flex justify-between text-xs font-black text-slate-400"><span>預計分娩日期</span><span id="suggest-birth" class="text-slate-900">尚未計算</span></div>
-                    </div>
-                </div>
-                <button onclick="window.submitSmartMating()" class="w-full py-6 bg-pink-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">建立批次並寫入雲端</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Transfer Modal -->
-    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
-            <div class="bg-blue-600 p-10 text-white flex justify-between items-center font-black">
-                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
-                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
-            </div>
-            <div class="p-10 space-y-8 font-black">
-                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
-                <div class="grid grid-cols-2 gap-6 font-black">
-                    <div>
-                        <label class="text-[10px] text-slate-400 uppercase mb-2 block">目標畜舍 (基於日齡智慧推薦)</label>
-                        <select id="transfer-target" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
-                            <option value="">請先選取批次</option>
-                        </select>
-                    </div>
-                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">實際轉入數量</label><input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl font-black"></div>
-                </div>
-                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">更新基本資料與畜舍</button>
+            <div id="history-edit-inputs" class="space-y-4 mb-6"></div>
+            <div class="flex gap-3">
+                <button onclick="window.closeHistoryEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
+                <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
             </div>
         </div>
     </div>
     
-    <!-- Confirm Reset Modal -->
+    <!-- 確認重置視窗 -->
     <div id="confirm-modal" class="fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
         <div class="bg-white w-full max-sm rounded-[40px] p-8 shadow-2xl text-center animate-fade">
             <h3 class="text-xl font-black mb-4 text-slate-900">確定要清空雲端資料嗎？</h3>
@@ -398,22 +306,107 @@
         </div>
     </div>
 
-    <!-- History Edit Modal -->
-    <div id="history-edit-modal" class="fixed inset-0 z-[5500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 hidden font-black">
-        <div class="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl animate-fade">
-            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-indigo-100">
-                <div class="bg-indigo-600 p-2 rounded-lg text-white"><i data-lucide="edit-3" class="w-5 h-5"></i></div>
-                <div>
-                    <h3 class="font-black text-indigo-900">修正歷史紀錄</h3>
-                    <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Modify Record</p>
+    <!-- Analysis Modal (Restored Content) -->
+    <div id="analysis-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 hidden font-black">
+        <div class="bg-white w-full max-w-5xl rounded-[60px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade font-black">
+            <div class="p-10 border-b border-slate-50 flex justify-between items-center bg-white font-black">
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-600 p-4 rounded-3xl text-white shadow-lg font-black"><i data-lucide="bar-chart-3"></i></div>
+                    <div>
+                        <div class="flex items-baseline gap-3">
+                            <h3 id="analysis-batch-id" class="text-3xl font-black tracking-tighter font-black">BATCH-ID</h3>
+                            <span id="analysis-total-rate" class="text-sm font-black bg-slate-900 text-white px-3 py-1 rounded-full font-black">全期育成 0%</span>
+                        </div>
+                        <p class="text-slate-400 text-xs font-black uppercase mt-1">Efficiency & Modification Logs</p>
+                    </div>
                 </div>
+                <button onclick="window.closeAnalysisModal()" class="p-4 text-slate-300 hover:text-rose-500 transition-all font-black"><i data-lucide="x" class="w-10 h-10 font-black"></i></button>
             </div>
-            <div id="history-edit-inputs" class="space-y-4 mb-6">
-                <!-- 動態插入欄位 -->
+            <div class="p-10 overflow-y-auto no-scrollbar space-y-10 font-black">
+                <div class="grid grid-cols-3 gap-6 font-black">
+                    <div id="box-nursery" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">保育期 (W4-W11)</p>
+                        <p id="rate-nursery" class="text-4xl font-black">0%</p>
+                        <p id="status-nursery" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                    <div id="box-small" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">小豬期 (W11-W19)</p>
+                        <p id="rate-small" class="text-4xl font-black">0%</p>
+                        <p id="status-small" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                    <div id="box-medium" class="p-8 rounded-[40px] text-center border-2 border-transparent transition-all bg-slate-50/50 font-black">
+                        <p class="text-[10px] text-slate-400 uppercase mb-2 font-black">中豬期 (W19-W24)</p>
+                        <p id="rate-medium" class="text-4xl font-black">0%</p>
+                        <p id="status-medium" class="text-[9px] mt-2 px-3 py-1 rounded-full bg-slate-100 text-slate-400 inline-block font-black">等待中</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-[40px] border-2 border-slate-50 p-10 font-black">
+                    <h4 class="text-lg font-black mb-8 flex items-center gap-2"><i data-lucide="trending-up" class="text-blue-600"></i> 生長週趨勢分析</h4>
+                    <div style="height: 400px; position: relative;"><canvas id="lifecycle-chart"></canvas></div>
+                </div>
+                <div id="analysis-history-list" class="mt-8 font-black"></div>
             </div>
-            <div class="flex gap-3">
-                <button onclick="window.closeHistoryEditModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm active:scale-95 transition-all">取消</button>
-                <button id="history-save-btn" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-indigo-600/20 transition-all">確認修正</button>
+        </div>
+    </div>
+
+    <!-- Edit Modal (Restored Content) -->
+    <div id="edit-modal" class="fixed inset-0 z-[5000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-md rounded-[48px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div id="modal-header-color" class="bg-indigo-600 p-8 text-white flex justify-between items-center font-black">
+                <div><h3 id="modal-batch-id" class="text-2xl font-black italic">BATCH ID</h3><p class="text-indigo-200 text-[10px] uppercase font-bold tracking-widest mt-1">Modification Engine</p></div>
+                <button onclick="window.closeEditModal()" class="p-2 hover:bg-white/20 rounded-full transition-all font-black"><i data-lucide="x" class="font-black"></i></button>
+            </div>
+            <div class="p-8 space-y-6 font-black">
+                <div class="bg-orange-50 p-5 rounded-3xl border border-orange-100 font-black">
+                    <label class="text-[10px] text-orange-600 uppercase mb-2 block tracking-widest font-black">異動紀錄日期</label>
+                    <input type="date" id="modal-date" class="w-full bg-white border-2 border-transparent focus:border-orange-400 outline-none p-3 rounded-2xl text-xl font-black transition-all font-black">
+                </div>
+                <div id="modal-inputs" class="space-y-4 font-black"></div>
+                <button id="save-loss-btn" onclick="window.saveLossRecord()" class="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">確認儲存並同步雲端</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mating Modal (Restored Structure for safety) -->
+    <div id="mating-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div class="bg-pink-600 p-10 text-white flex justify-between items-center font-black">
+                <div><h3 class="text-3xl font-black tracking-tighter">智慧配種錄入</h3><p class="text-pink-200 text-xs font-bold uppercase mt-1">Suggested Batch Planning</p></div>
+                <button onclick="window.closeSmartMatingModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
+            </div>
+            <div class="p-10 space-y-8 font-black">
+                <div class="grid grid-cols-2 gap-6 font-black">
+                    <div class="col-span-2"><label class="text-[10px] text-slate-400 uppercase mb-2 block">推薦批次 ID</label><input type="text" id="mating-id" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl text-pink-600 font-black"></div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種日期</label><input type="date" id="mating-date" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-xl font-black"></div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">配種母豬頭數</label><input type="number" id="mating-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-pink-500 font-black text-2xl font-black"></div>
+                    <div class="col-span-2 bg-slate-50 p-6 rounded-3xl border border-slate-100 font-black">
+                        <div class="flex justify-between text-xs font-black text-slate-400"><span>預計分娩日期</span><span id="suggest-birth" class="text-slate-900">尚未計算</span></div>
+                    </div>
+                </div>
+                <button onclick="window.submitSmartMating()" class="w-full py-6 bg-pink-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">建立批次並寫入雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transfer Modal -->
+    <div id="transfer-modal" class="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 hidden font-black">
+        <div class="bg-white w-full max-w-2xl rounded-[50px] shadow-2xl overflow-hidden animate-fade font-black">
+            <div class="bg-blue-600 p-10 text-white flex justify-between items-center font-black">
+                <div><h3 class="text-3xl font-black tracking-tighter">智慧轉舍紀錄</h3><p class="text-blue-200 text-xs font-bold uppercase mt-1">Smart Phase Transfer Management</p></div>
+                <button onclick="window.closeTransferModal()" class="p-4 hover:bg-white/10 rounded-full transition-all font-black"><i data-lucide="x" class="w-8 h-8 font-black"></i></button>
+            </div>
+            <div class="p-10 space-y-8 font-black">
+                <div><label class="text-[10px] text-slate-400 uppercase mb-4 block">選擇轉入對象批次</label><div id="transfer-batch-list" class="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto no-scrollbar font-black"></div></div>
+                <div class="grid grid-cols-2 gap-6 font-black">
+                    <div>
+                        <label class="text-[10px] text-slate-400 uppercase mb-2 block">目標畜舍 (基於日齡智慧推薦)</label>
+                        <select id="transfer-target" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black">
+                            <option value="">請先選取批次</option>
+                        </select>
+                    </div>
+                    <div><label class="text-[10px] text-slate-400 uppercase mb-2 block">實際轉入數量</label><input type="number" id="transfer-count" class="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-blue-500 font-black text-2xl font-black"></div>
+                </div>
+                <button onclick="window.submitTransfer()" class="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all uppercase font-black">更新基本資料與畜舍</button>
             </div>
         </div>
     </div>
@@ -422,11 +415,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDocs, writeBatch, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // *** 自動判斷 App ID，解決權限錯誤並支援同步 ***
-        // 在 GitHub/正式環境：使用統一 ID "yonglong-production-main" 進行同步
-        // 在 預覽環境：使用系統分配的 __app_id 進行測試，避免權限錯誤
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : "yonglong-production-main";
 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyBd-t01YqCEJorVA3Pguz_z2qfOIKhVJ28", 
@@ -437,6 +425,10 @@
             appId: "1:420882808146:web:6086ac11d1323936418e8b"
         };
         const PASSCODE = "YL2025";
+        
+        // *** 智慧動態 ID：在預覽用測試 ID，在正式用正式 ID ***
+        const APP_ID = typeof window.__app_id !== 'undefined' ? window.__app_id : (typeof __app_id !== 'undefined' ? __app_id : "yonglong-production-main");
+        
         const WEANING_DAYS = 28;
 
         const app = initializeApp(firebaseConfig);
@@ -474,16 +466,14 @@
         window.safeStr = (v) => {
             if (v instanceof Date) return v.toISOString().split('T')[0];
             if (typeof v === 'number' && v > 40000) return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
-            // Date Format Optimization: YYYY-MM-DD
             const s = String(v ?? "").trim();
-            if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                return s.split('T')[0]; 
-            }
+            if (s.match(/^\d{4}-\d{2}-\d{2}T/)) { return s.split('T')[0]; }
             return s;
         };
         window.cleanNum = (v) => isNaN(parseFloat(v)) ? 0 : parseFloat(v);
         
-        // --- Core Functions: Defined BEFORE usage ---
+        // --- 1. CORE LOGIC (Defined First) ---
+        
         function calculateStatus() {
             const selDate = new Date(selectedDate);
             const anchorDate = new Date(CONFIG.ANCHOR);
@@ -988,7 +978,7 @@
                 }
                 const parsedData = XLSX.utils.sheet_to_json(basicSheet, { defval: "" }).map(r => {
                     const nr = {}; Object.keys(r).forEach(k => nr[k.trim()] = r[k]); 
-                    // Date Format Optimization: YYYY-MM-DD (Local Time)
+                    // Date Format Optimization: YYYY-MM-DD
                     ['配種日期', '分娩日期'].forEach(k => {
                         if (nr[k] instanceof Date) {
                              const y = nr[k].getFullYear();
@@ -999,11 +989,6 @@
                     });
                     return nr;
                 });
-                
-                // Update local state immediately for instant feedback
-                excelData = parsedData;
-                renderFn();
-                
                 window.showMessage("☁️ 正在上傳基礎資料...", "info");
                 try {
                     const baseRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'baseRecords');
@@ -1051,7 +1036,6 @@
             try {
                 window.showMessage("⏳ 重置中...", "info");
                 const batch = writeBatch(db);
-                // Use APP_ID for environment-aware paths
                 const collections = ['dailyRecords', 'manualBatches', 'baseRecords'];
                 for (const colName of collections) {
                     const snap = await getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', colName));
@@ -1096,8 +1080,7 @@
             const saleDate = document.getElementById('sale-date').value;
             const now = new Date().toISOString();
             if (count <= 0 || avg <= 0) return alert("頭數與均重必須大於 0");
-            const uniqueId = `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`;
-            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', uniqueId);
+            const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'dailyRecords', `${window.selectedSaleId}_sale_${now.replace(/[^0-9]/g, "")}`);
             await setDoc(ref, { batchId: window.selectedSaleId, date: saleDate, soldCount: count, avgWeight: avg, updatedAt: now });
             window.showMessage(`✅ 已成功錄入單筆出豬交易：${count} 頭，均重 ${avg}kg`);
             document.getElementById('sale-modal').classList.add('hidden');
